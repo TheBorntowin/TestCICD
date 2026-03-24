@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+
 @Entity
 @Table(name = "subscriptions")
 @Getter @Setter
@@ -25,8 +26,9 @@ public class Subscription {
         if (this.id == null) this.id = UUID.randomUUID().toString();
     }
 
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organization_id", nullable = false)
+    @JoinColumn(name = "org_id", nullable = false)
     private Organization organization;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -37,8 +39,9 @@ public class Subscription {
     @Column(name = "status", nullable = false, length = 20)
     private SubscriptionStatus status;
 
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "billing_cycle", nullable = false, length = 10)
+    @Column(name = "billing_cycle", nullable = false, length = 15)
     private BillingCycle billingCycle;
 
     @Column(name = "trial_starts_at")
@@ -70,10 +73,11 @@ public class Subscription {
     @Column(name = "payment_method_type", length = 20)
     private PaymentMethodType paymentMethodType;
 
+    /** Grace period after payment failure before suspension. */
     @Column(name = "grace_period_ends_at")
     private LocalDateTime gracePeriodEndsAt;
 
-    // FK → plans.id (plan précédent avant downgrade)
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "downgraded_from_plan_id")
     private Plan downgradedFromPlan;
@@ -87,20 +91,27 @@ public class Subscription {
     private LocalDateTime updatedAt;
 
     // ── Relations ──
+
     @OneToMany(mappedBy = "subscription", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Invoice> invoices;
 
     @OneToMany(mappedBy = "subscription", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<PaymentAttempt> paymentAttempts;
 
+
     @OneToMany(mappedBy = "subscription", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<UpsellRecommendation> upsellRecommendations;
+
 
     @OneToMany(mappedBy = "subscription", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<ChurnPrediction> churnPredictions;
 
     // ── Enums ──
-    public enum SubscriptionStatus { TRIAL, ACTIVE, PAST_DUE, CANCELED, PAUSED }
-    public enum BillingCycle { MONTHLY, YEARLY }
+
+    public enum SubscriptionStatus { TRIALING, ACTIVE, PAST_DUE, CANCELED, PAUSED }
+
+
+    public enum BillingCycle { MONTHLY, ANNUAL, INSTITUTIONAL }
+
     public enum PaymentMethodType { CARD, SEPA_DEBIT }
 }

@@ -7,6 +7,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+
 @Entity
 @Table(name = "payment_attempts")
 @Getter @Setter
@@ -22,6 +23,11 @@ public class PaymentAttempt {
     public void generateId() {
         if (this.id == null) this.id = UUID.randomUUID().toString();
     }
+
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "org_id", nullable = false)
+    private Organization organization;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "subscription_id", nullable = false)
@@ -58,5 +64,6 @@ public class PaymentAttempt {
     private LocalDateTime attemptedAt;
 
     // ── Enum ──
+
     public enum AttemptStatus { PENDING, SUCCEEDED, FAILED, REQUIRES_ACTION }
 }

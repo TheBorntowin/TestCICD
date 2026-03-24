@@ -64,6 +64,9 @@ public class Plan {
     @Builder.Default
     private Boolean apiAccess = false;
 
+    @Column(name = "api_calls_per_month")
+    private Integer apiCallsPerMonth;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "custom_integrations", nullable = false, length = 20)
     private CustomIntegrations customIntegrations;
@@ -71,6 +74,20 @@ public class Plan {
     @Column(name = "sso_enabled", nullable = false)
     @Builder.Default
     private Boolean ssoEnabled = false;
+
+
+    @Column(name = "lms_integration", nullable = false)
+    @Builder.Default
+    private Boolean lmsIntegration = false;
+
+
+    @Column(name = "grade_export", nullable = false)
+    @Builder.Default
+    private Boolean gradeExport = false;
+
+
+    @Column(name = "features_json", columnDefinition = "json")
+    private String featuresJson;
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default
@@ -91,14 +108,22 @@ public class Plan {
     private LocalDateTime updatedAt;
 
     // ── Relations ──
+
     @OneToMany(mappedBy = "plan", fetch = FetchType.LAZY)
     private List<Subscription> subscriptions;
 
     @OneToMany(mappedBy = "recommendedPlan", fetch = FetchType.LAZY)
     private List<UpsellRecommendation> upsellRecommendations;
 
+
+    @OneToMany(mappedBy = "upsellRecommendedPlan", fetch = FetchType.LAZY)
+    private List<ChurnPrediction> churnUpsellTargets;
+
     // ── Enums ──
+
     public enum MlTier { NONE, BASIC, FULL, FULL_API }
-    public enum SupportTier { COMMUNITY, EMAIL, PRIORITY, DEDICATED }
+
+    public enum SupportTier { COMMUNITY, EMAIL, PRIORITY, DEDICATED, ACADEMIC }
+
     public enum CustomIntegrations { NONE, LIMITED, FULL }
 }

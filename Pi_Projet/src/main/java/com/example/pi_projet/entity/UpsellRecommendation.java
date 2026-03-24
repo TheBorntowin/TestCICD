@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+
 @Entity
 @Table(name = "upsell_recommendations")
 @Getter @Setter
@@ -25,7 +26,7 @@ public class UpsellRecommendation {
     }
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organization_id", nullable = false)
+    @JoinColumn(name = "org_id", nullable = false)
     private Organization organization;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -50,6 +51,7 @@ public class UpsellRecommendation {
     @Column(name = "prompt_message", columnDefinition = "text")
     private String promptMessage;
 
+
     @Column(name = "estimated_savings_h_per_week", precision = 6, scale = 2)
     private BigDecimal estimatedSavingsHPerWeek;
 
@@ -68,6 +70,10 @@ public class UpsellRecommendation {
     @Column(name = "responded_at")
     private LocalDateTime respondedAt;
 
+
+    @Column(name = "features_snapshot_json", columnDefinition = "json")
+    private String featuresSnapshotJson;
+
     @Column(name = "model_version", nullable = false, length = 50)
     private String modelVersion;
 
@@ -76,7 +82,10 @@ public class UpsellRecommendation {
     private LocalDateTime createdAt;
 
     // ── Enums ──
+
     public enum TriggerDimension { MEMBERS, PROJECTS, STORAGE, ML_USAGE, API_CALLS }
+
     public enum TriggerType { DAILY_BATCH, REALTIME_THRESHOLD }
+
     public enum RecommendationStatus { PENDING, SHOWN, ACCEPTED, DISMISSED }
 }

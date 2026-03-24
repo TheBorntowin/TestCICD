@@ -40,6 +40,11 @@ public class Organization {
     @JoinColumn(name = "owner_id", insertable = false, updatable = false)
     private User owner;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "org_type", nullable = false, length = 20)
+    @Builder.Default
+    private OrgType orgType = OrgType.ENTERPRISE;
+
     @Column(name = "stripe_customer_id", length = 255)
     private String stripeCustomerId;
 
@@ -86,17 +91,24 @@ public class Organization {
 
     @JsonIgnore
     @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<UsageQuota> usageQuotas;
+    private List<UsageQuota> usageMetrics;
 
     @JsonIgnore
     @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<PaymentAttempt> paymentAttempts;
+
+
+     @JsonIgnore
+    @OneToMany(mappedBy = "organization", fetch = FetchType.LAZY)
     private List<UpsellRecommendation> upsellRecommendations;
 
     @JsonIgnore
-    @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "organization", fetch = FetchType.LAZY)
     private List<ChurnPrediction> churnPredictions;
-
+    
     @JsonIgnore
     @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<ProjectTemplate> templates;
+
+    public enum OrgType { ENTERPRISE, ACADEMIC }
 }

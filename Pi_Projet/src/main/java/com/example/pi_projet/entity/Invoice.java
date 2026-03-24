@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,13 +25,15 @@ public class Invoice {
         if (this.id == null) this.id = UUID.randomUUID().toString();
     }
 
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organization_id", nullable = false)
+    @JoinColumn(name = "org_id", nullable = false)
     private Organization organization;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "subscription_id", nullable = false)
     private Subscription subscription;
+
 
     @Column(name = "invoice_number", nullable = false, unique = true, length = 30)
     private String invoiceNumber;
@@ -44,14 +45,21 @@ public class Invoice {
     @Column(name = "status", nullable = false, length = 20)
     private InvoiceStatus status;
 
-    @Column(name = "amount_cents", nullable = false)
-    private Integer amountCents;
+
+    @Column(name = "subtotal_cents", nullable = false)
+    private Integer subtotalCents;
+
+
+    @Column(name = "tax_rate", nullable = false)
+    private Double taxRate;
+
 
     @Column(name = "tax_amount_cents", nullable = false)
     private Integer taxAmountCents;
 
-    @Column(name = "tax_rate_percent", nullable = false, precision = 5, scale = 2)
-    private BigDecimal taxRatePercent;
+
+    @Column(name = "total_cents", nullable = false)
+    private Integer totalCents;
 
     @Column(name = "currency", nullable = false, length = 3)
     @Builder.Default
@@ -69,23 +77,26 @@ public class Invoice {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
+
     @Column(name = "pdf_url", columnDefinition = "text")
     private String pdfUrl;
 
+
     @Column(name = "pdf_sent_at")
     private LocalDateTime pdfSentAt;
-
-    @Column(name = "line_items_json", columnDefinition = "json")
-    private String lineItemsJson;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // ── Relations ──
+
+    @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    private List<InvoiceLineItem> lineItems;
+
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<PaymentAttempt> paymentAttempts;
 
     // ── Enum ──
+
     public enum InvoiceStatus { DRAFT, OPEN, PAID, VOID, UNCOLLECTIBLE }
 }

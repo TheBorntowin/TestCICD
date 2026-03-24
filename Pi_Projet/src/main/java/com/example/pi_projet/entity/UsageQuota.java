@@ -8,8 +8,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+
 @Entity
-@Table(name = "usage_quotas")
+@Table(name = "usage_metrics",
+       uniqueConstraints = @UniqueConstraint(columnNames = {"org_id", "metric_date"}))
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @Builder
@@ -24,56 +26,69 @@ public class UsageQuota {
         if (this.id == null) this.id = UUID.randomUUID().toString();
     }
 
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organization_id", nullable = false)
+    @JoinColumn(name = "org_id", nullable = false)
     private Organization organization;
 
-    // FK → workspaces.id (externe au module, conservé en String brut)
-    @Column(name = "workspace_id", nullable = false, length = 36)
-    private String workspaceId;
 
-    @Column(name = "period_start", nullable = false)
-    private LocalDate periodStart;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "plan_id", nullable = false)
+    private Plan plan;
 
-    @Column(name = "period_end", nullable = false)
-    private LocalDate periodEnd;
+    /** Date of this usage snapshot (one row per org per day). */
+    @Column(name = "metric_date", nullable = false)
+    private LocalDate metricDate;
 
-    @Column(name = "members_count", nullable = false)
+    /** Total active members across all workspaces in the org on this date. */
+    @Column(name = "active_members_count", nullable = false)
     @Builder.Default
-    private Integer membersCount = 0;
+    private Integer activeMembersCount = 0;
 
-    @Column(name = "members_limit", nullable = false)
-    private Integer membersLimit;
-
-    @Column(name = "active_projects_count", nullable = false)
+    /** Total workspaces owned by the org on this date. */
+    @Column(name = "workspaces_count", nullable = false)
     @Builder.Default
-    private Integer activeProjectsCount = 0;
+    private Integer workspacesCount = 0;
 
-    @Column(name = "projects_limit", nullable = false)
-    private Integer projectsLimit;
-
-    @Column(name = "storage_used_mb", nullable = false)
+    /** Total active projects across all workspaces on this date. */
+    @Column(name = "projects_count", nullable = false)
     @Builder.Default
-    private Long storageUsedMb = 0L;
+    private Integer projectsCount = 0;
 
-    @Column(name = "storage_limit_mb", nullable = false)
-    private Long storageLimitMb;
+    /** Total storage consumed by the org in gigabytes on this date. */
+    @Column(name = "storage_used_gb", nullable = false)
+    @Builder.Default
+    private Double storageUsedGb = 0.0;
 
+    /** REST API calls made by the org on this date (Enterprise plan only). */
     @Column(name = "api_calls_count", nullable = false)
     @Builder.Default
     private Long apiCallsCount = 0L;
 
-    @Column(name = "ml_requests_count", nullable = false)
+    /** ML model inference requests made by the org on this date. */
+    @Column(name = "ml_inferences_count", nullable = false)
     @Builder.Default
-    private Long mlRequestsCount = 0L;
+    private Long mlInferencesCount = 0L;
 
-    @Column(name = "quota_alert_80_sent_at")
-    private LocalDateTime quotaAlert80SentAt;
+    /** Grade CSV exports performed on this date (Academic plan only). */
+    @Column(name = "grade_exports_count", nullable = false)
+    @Builder.Default
+    private Integer gradeExportsCount = 0;
 
-    @Column(name = "quota_alert_100_sent_at")
-    private LocalDateTime quotaAlert100SentAt;
+    /** Timestamp when this snapshot was computed by the daily batch job. */
+    @Column(name = "computed_at")
+    private LocalDateTime computedAt;
 
+    /** Timestamp of the last incremental update (real-time quota enforcement). */
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /** Fired when any dimension crosses the 80% quota threshold. */
+    @Column(name = "quota_alert_80_sent_at")
+    private LocalDateTime quotaAlert80SentAt;
+
+    /** Fired when any dimension reaches 100% quota. */
+    @Column(name = "quota_alert_100_sent_at")
+    private LocalDateTime quotaAlert100SentAt;
 }
