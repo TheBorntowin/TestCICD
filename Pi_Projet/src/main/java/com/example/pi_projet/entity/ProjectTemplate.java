@@ -51,7 +51,11 @@ public class ProjectTemplate {
     private Boolean isPublic = false;
 
     @Column(name = "created_by", nullable = false)
-    private UUID createdBy;
+    private Long createdBy; // now Long to match User.id
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", insertable = false, updatable = false)
+    private User createdByUser;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

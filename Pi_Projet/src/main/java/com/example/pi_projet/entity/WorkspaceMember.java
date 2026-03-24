@@ -7,6 +7,7 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.Where;
 
 import java.time.Instant;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.UUID;
 
 @Entity
@@ -31,7 +32,16 @@ public class WorkspaceMember {
     private Workspace workspace;
 
     @Column(name = "user_id", nullable = false)
-    private UUID userId; // TODO: FK to User entity when available
+    private Long userId; // TODO: FK to User entity (now Long id)
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", insertable = false, updatable = false)
+    private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "invited_by", nullable = true)
+    @JsonIgnore
+    private User invitedByUser; // nullable inviter
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

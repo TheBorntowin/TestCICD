@@ -31,7 +31,11 @@ public class MLTeamRecommendation {
     private Project project;
 
     @Column(name = "recommended_user_id", nullable = false)
-    private UUID recommendedUserId;
+    private Long recommendedUserId; // now Long to match User.id
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recommended_user_id", insertable = false, updatable = false)
+    private User recommendedUser;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "target_role", nullable = false, length = 25)
@@ -53,7 +57,11 @@ public class MLTeamRecommendation {
     private Instant generatedAt;
 
     @Column(name = "reviewed_by")
-    private UUID reviewedBy;
+    private Long reviewedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reviewed_by", insertable = false, updatable = false)
+    private User reviewedByUser;
 
     @Column(name = "reviewed_at")
     private Instant reviewedAt;

@@ -35,7 +35,11 @@ public class Project {
     // TODO: Project likely needs FK relations to Task, Sprint, or Phase entities from other modules
 
     @Column(name = "created_by", nullable = false)
-    private UUID createdBy;
+    private Long createdBy; // now Long to match User.id
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", insertable = false, updatable = false)
+    private User createdByUser;
 
     @Column(nullable = false, length = 150)
     private String name;

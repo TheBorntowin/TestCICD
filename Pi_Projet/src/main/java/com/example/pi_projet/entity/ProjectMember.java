@@ -1,6 +1,7 @@
 package com.example.pi_projet.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
@@ -31,7 +32,17 @@ public class ProjectMember {
     private Project project;
 
     @Column(name = "user_id", nullable = false)
-    private UUID userId; // TODO: FK to User entity when available
+    private Long userId; // TODO: FK to User entity (now Long id)
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", insertable = false, updatable = false)
+    @JsonIgnore
+    private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_by", nullable = true)
+    @JsonIgnore
+    private User assignedByUser; // nullable assigner
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 25)

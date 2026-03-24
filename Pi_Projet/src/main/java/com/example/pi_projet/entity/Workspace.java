@@ -8,7 +8,6 @@ import org.hibernate.annotations.Where;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
@@ -33,7 +32,11 @@ public class Workspace {
     private String slug;
 
     @Column(name = "owner_id", nullable = false)
-    private UUID ownerId;
+    private Long ownerId; // switched to Long to match `User.id`
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id", insertable = false, updatable = false)
+    private User owner;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organization_id", nullable = false)

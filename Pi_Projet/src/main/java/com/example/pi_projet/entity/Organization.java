@@ -11,7 +11,6 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Entity
 @Table(name = "organizations")
@@ -34,7 +33,11 @@ public class Organization {
 
     // denormalized owner id — TODO: replace with FK to User entity when User module available
     @Column(name = "owner_id", nullable = false)
-    private UUID ownerId;
+    private Long ownerId; // switched to Long to match `User.id`
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id", insertable = false, updatable = false)
+    private User owner;
 
     @Column(name = "stripe_customer_id", length = 255)
     private String stripeCustomerId;
