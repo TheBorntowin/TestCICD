@@ -5,17 +5,18 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.UpdateTimestamp;
-import org.hibernate.annotations.Where;
+import org.hibernate.annotations.SQLRestriction;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.Instant;
+import java.util.UUID;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
 @Table(name = "organizations")
 @SQLDelete(sql = "UPDATE organizations SET deleted_at = NOW() WHERE id = ?")
-@Where(clause = "deleted_at IS NULL")
+@SQLRestriction("deleted_at IS NULL")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @Builder
