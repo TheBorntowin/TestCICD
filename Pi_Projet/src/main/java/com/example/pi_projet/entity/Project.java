@@ -5,11 +5,13 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.Where;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "projects", indexes = {
@@ -18,6 +20,7 @@ import java.util.UUID;
         @Index(name = "idx_project_created_by",  columnList = "created_by")
 })
 @SQLDelete(sql = "UPDATE projects SET deleted_at = NOW() WHERE id = ?")
+@Where(clause = "deleted_at IS NULL")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Project {
 
@@ -28,6 +31,8 @@ public class Project {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "workspace_id", nullable = false)
     private Workspace workspace;
+
+    // TODO: Project likely needs FK relations to Task, Sprint, or Phase entities from other modules
 
     @Column(name = "created_by", nullable = false)
     private UUID createdBy;
@@ -75,6 +80,15 @@ public class Project {
 
 
 
+    @JsonIgnore
     @OneToMany(mappedBy = "project")
     private List<ChatRoom> chatRooms;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<ProjectMember> projectMembers;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<MLTeamRecommendation> mlTeamRecommendations;
 }

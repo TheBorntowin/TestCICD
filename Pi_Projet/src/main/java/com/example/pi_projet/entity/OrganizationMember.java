@@ -10,25 +10,25 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "workspace_members",
-        uniqueConstraints = @UniqueConstraint(name = "uk_workspace_user", columnNames = {"workspace_id", "user_id"}),
+@Table(name = "org_members",
+        uniqueConstraints = @UniqueConstraint(name = "uk_organization_user", columnNames = {"organization_id","user_id"}),
         indexes = {
-                @Index(name = "idx_wm_workspace", columnList = "workspace_id"),
-                @Index(name = "idx_wm_user",      columnList = "user_id")
+                @Index(name = "idx_orgm_organization", columnList = "organization_id"),
+                @Index(name = "idx_orgm_user", columnList = "user_id")
         }
 )
-@SQLDelete(sql = "UPDATE workspace_members SET deleted_at = NOW() WHERE id = ?")
+@SQLDelete(sql = "UPDATE organization_members SET deleted_at = NOW() WHERE id = ?")
 @Where(clause = "deleted_at IS NULL")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class WorkspaceMember {
+public class OrganizationMember {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "workspace_id", nullable = false)
-    private Workspace workspace;
+    @JoinColumn(name = "organization_id", nullable = false)
+    private Organization organization;
 
     @Column(name = "user_id", nullable = false)
     private UUID userId; // TODO: FK to User entity when available
@@ -36,7 +36,7 @@ public class WorkspaceMember {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private WorkspaceRole role = WorkspaceRole.MEMBER;
+    private OrganizationRole role = OrganizationRole.MEMBER;
 
     @CreationTimestamp
     @Column(name = "joined_at", updatable = false)
@@ -45,10 +45,7 @@ public class WorkspaceMember {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
-    public enum WorkspaceRole {
-        OWNER, ADMIN, MEMBER, VIEWER
+    public enum OrganizationRole {
+        OWNER, ADMIN, MEMBER
     }
-
-    // Service-layer note: when soft-deleting a WorkspaceMember, also soft-delete all ProjectMember
-    // records for this user in projects that belong to the same workspace.
 }

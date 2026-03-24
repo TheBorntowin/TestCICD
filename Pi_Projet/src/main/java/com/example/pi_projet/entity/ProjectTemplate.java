@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.Where;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -12,13 +13,14 @@ import java.util.UUID;
 @Entity
 @Table(name = "project_templates",
         indexes = {
-                @Index(name = "idx_pt_workspace", columnList = "workspace_id"),
+        @Index(name = "idx_pt_organization", columnList = "organization_id"),
                 @Index(name = "idx_pt_public", columnList = "is_public"),
                 @Index(name = "idx_pt_created_by", columnList = "created_by"),
                 @Index(name = "idx_pt_type", columnList = "template_type")
         }
 )
 @SQLDelete(sql = "UPDATE project_templates SET deleted_at = NOW() WHERE id = ?")
+@Where(clause = "deleted_at IS NULL")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class ProjectTemplate {
 
@@ -27,8 +29,8 @@ public class ProjectTemplate {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workspace_id")
-    private Workspace workspace; // null for global templates
+    @JoinColumn(name = "organization_id")
+    private Organization organization; // null for global/platform templates
 
     @Column(name = "name", nullable = false, length = 100)
     private String name;

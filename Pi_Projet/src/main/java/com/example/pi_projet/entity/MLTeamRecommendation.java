@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -17,6 +18,7 @@ import java.util.UUID;
         }
 )
 @SQLDelete(sql = "UPDATE ml_team_recommendations SET deleted_at = NOW() WHERE id = ?")
+@Where(clause = "deleted_at IS NULL")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class MLTeamRecommendation {
 
@@ -62,4 +64,7 @@ public class MLTeamRecommendation {
     public enum RecommendationStatus {
         PENDING, ACCEPTED, REJECTED, EXPIRED
     }
+
+    // Service-layer: when accepting a recommendation, ensure `recommendedUserId` is an active
+    // WorkspaceMember of the recommendation's project workspace.
 }

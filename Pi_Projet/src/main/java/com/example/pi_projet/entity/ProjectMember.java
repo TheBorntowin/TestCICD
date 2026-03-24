@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -17,6 +18,7 @@ import java.util.UUID;
         }
 )
 @SQLDelete(sql = "UPDATE project_members SET deleted_at = NOW() WHERE id = ?")
+@Where(clause = "deleted_at IS NULL")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class ProjectMember {
 
@@ -29,7 +31,7 @@ public class ProjectMember {
     private Project project;
 
     @Column(name = "user_id", nullable = false)
-    private UUID userId;
+    private UUID userId; // TODO: FK to User entity when available
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 25)
@@ -46,4 +48,7 @@ public class ProjectMember {
     public enum ProjectRole {
         PROJECT_MANAGER, DEVELOPER, REVIEWER, OBSERVER
     }
+
+    // Service-layer validation: before adding a ProjectMember, verify the userId has an active
+    // (non-deleted) WorkspaceMember record for the project's workspace.
 }

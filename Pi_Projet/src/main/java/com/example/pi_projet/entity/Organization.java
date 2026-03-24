@@ -3,27 +3,28 @@ package com.example.pi_projet.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.Where;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
 @Entity
 @Table(name = "organizations")
+@SQLDelete(sql = "UPDATE organizations SET deleted_at = NOW() WHERE id = ?")
+@Where(clause = "deleted_at IS NULL")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @Builder
 public class Organization {
 
     @Id
-    @Column(name = "id", updatable = false, nullable = false, length = 36)
-    private String id;
-
-    @PrePersist
-    public void generateId() {
-        if (this.id == null) this.id = UUID.randomUUID().toString();
-    }
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(name = "name", nullable = false, length = 255)
     private String name;
@@ -31,8 +32,9 @@ public class Organization {
     @Column(name = "slug", nullable = false, unique = true, length = 100)
     private String slug;
 
-    @Column(name = "owner_user_id", nullable = false, length = 36)
-    private String ownerUserId;
+    // denormalized owner id — TODO: replace with FK to User entity when User module available
+    @Column(name = "owner_id", nullable = false)
+    private UUID ownerId;
 
     @Column(name = "stripe_customer_id", length = 255)
     private String stripeCustomerId;
@@ -57,23 +59,40 @@ public class Organization {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // ── Relations ──
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    // ── Relations ── (module 2 links and others)
+    @JsonIgnore
+    @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Workspace> workspaces; // Module 2: Workspace -> organization
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<OrganizationMember> members; // Module 2: OrganizationMember -> organization
+
+    // Non-module-2 relations kept for completeness (JSON-ignored)
+    @JsonIgnore
     @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Subscription> subscriptions;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Invoice> invoices;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<UsageQuota> usageQuotas;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<UpsellRecommendation> upsellRecommendations;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<ChurnPrediction> churnPredictions;
 
-    // ✅ Nouvelle relation
+    @JsonIgnore
     @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<Workspace> workspaces;
+    private List<ProjectTemplate> templates;
 }

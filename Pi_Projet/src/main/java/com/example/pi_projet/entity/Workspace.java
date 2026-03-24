@@ -4,33 +4,33 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
-@Table(name = "workspaces", indexes = {
-        @Index(name = "idx_workspace_slug",  columnList = "slug",     unique = true),
-        @Index(name = "idx_workspace_owner", columnList = "owner_id")
-})
+@Table(name = "workspaces",
+       uniqueConstraints = @UniqueConstraint(name = "uk_workspace_org_slug", columnNames = {"organization_id","slug"}),
+       indexes = {
+           @Index(name = "idx_workspace_owner", columnList = "owner_id")
+       }
+)
 @SQLDelete(sql = "UPDATE workspaces SET deleted_at = NOW() WHERE id = ?")
+@Where(clause = "deleted_at IS NULL")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Workspace {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    private UUID id; // generated in service layer using nameUUIDFromBytes(orgSlug+":"+workspaceSlug)
 
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false, unique = true, length = 50)
+    @Column(nullable = false, length = 50)
     private String slug;
-
-    @Column(name = "plan_tier", nullable = false, length = 20)
-    @Builder.Default
-    private String planTier = "FREE";
 
     @Column(name = "owner_id", nullable = false)
     private UUID ownerId;
@@ -39,9 +39,13 @@ public class Workspace {
     @JoinColumn(name = "organization_id", nullable = false)
     private Organization organization;
 
-
+    @JsonIgnore
     @OneToMany(mappedBy = "workspace", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<WorkspaceMember> members;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "workspace", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Project> projects;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
@@ -49,4 +53,10 @@ public class Workspace {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    // TODO: workspace.id will be referenced by Module 6 usage_quotas.workspace_id
+    // TODO: If Task/Sprint/Phase entities are provided by other modules, add relations here.
+    // Example (when Task exists):
+    // @OneToMany(mappedBy = "workspace")
+    // private List<Task> tasks; // TODO: awaiting Task entity from Module X
 }
