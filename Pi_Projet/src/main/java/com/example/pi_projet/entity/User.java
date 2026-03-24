@@ -3,6 +3,7 @@ package com.example.pi_projet.entity;
 import jakarta.persistence.*;
         import lombok.*;
         import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -99,4 +100,24 @@ public class User {
     public enum RiskLevel {
         LOW, MEDIUM, HIGH, CRITICAL
     }
+
+
+
+    // ================= RELATIONS CHAT=================
+
+    // Chat rooms créées
+    @OneToMany(mappedBy = "createdBy")
+    private List<ChatRoom> createdRooms;
+
+    // Appartenance aux rooms
+    @OneToMany(mappedBy = "user")
+    private List<RoomMember> memberships;
+
+    // Messages envoyés
+    @OneToMany(mappedBy = "sender")
+    private List<Message> messages;
+
+    // Réactions
+    @OneToMany(mappedBy = "user")
+    private List<MessageReaction> reactions;
 }

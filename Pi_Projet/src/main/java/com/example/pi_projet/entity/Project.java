@@ -8,6 +8,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -71,4 +72,9 @@ public class Project {
     public enum Visibility {
         PUBLIC, PRIVATE
     }
+
+
+
+    @OneToMany(mappedBy = "project")
+    private List<ChatRoom> chatRooms;
 }

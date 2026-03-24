@@ -6,6 +6,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -27,13 +28,20 @@ public class Workspace {
     @Column(nullable = false, unique = true, length = 50)
     private String slug;
 
-
     @Column(name = "plan_tier", nullable = false, length = 20)
     @Builder.Default
     private String planTier = "FREE";
 
     @Column(name = "owner_id", nullable = false)
     private UUID ownerId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_id", nullable = false)
+    private Organization organization;
+
+
+    @OneToMany(mappedBy = "workspace", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<WorkspaceMember> members;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
