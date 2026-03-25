@@ -94,7 +94,7 @@ public class User {
     }
 
     public enum RoleName {
-        SUPER_ADMIN, ADMIN, MANAGER, EMPLOYEE, VIEWER
+        SUPER_ADMIN, ADMIN, MANAGER, EMPLOYEE, TUTOR, PRODUCT_OWNER, STUDENT, VIEWER
     }
 
     public enum RiskLevel {

@@ -197,8 +197,12 @@ export class LoginComponent implements OnInit {
     testAccounts = [
         { email: 'superadmin@cmp.com', password: 'superadmin123', role: 'SUPER_ADMIN' },
         { email: 'admin@test.com',     password: 'admin123',      role: 'ADMIN'       },
-        { email: 'manager@test.com',   password: 'manager123',    role: 'MANAGER'     },
-        { email: 'employee@test.com',  password: 'employee123',   role: 'EMPLOYEE'    },
+        { email: 'manager@test.com',   password: 'manager123',    role: 'MANAGER'        },
+        { email: 'po@test.com',        password: 'productowner123', role: 'PRODUCT_OWNER'  },
+        { email: 'tutor@test.com',     password: 'tutor123',      role: 'TUTOR'          },
+        { email: 'student@test.com',   password: 'student123',    role: 'STUDENT'        },
+        { email: 'viewer@test.com',    password: 'viewer123',     role: 'VIEWER'         },
+        { email: 'employee@test.com',  password: 'employee123',   role: 'EMPLOYEE'       },
     ];
 
     constructor(private fb: FormBuilder, private router: Router, private authService: AuthService) {
@@ -216,7 +220,7 @@ export class LoginComponent implements OnInit {
 
     getRoleColor(role: string): string {
         const map: Record<string, string> = {
-            SUPER_ADMIN: 'red', ADMIN: 'yellow', MANAGER: 'blue', EMPLOYEE: 'green'
+            SUPER_ADMIN: 'red', ADMIN: 'yellow', MANAGER: 'blue', TUTOR: 'green', EMPLOYEE: 'green'
         };
         return map[role] ?? 'blue';
     }
@@ -229,7 +233,11 @@ export class LoginComponent implements OnInit {
         this.authService.login({ email, password }).subscribe({
             next: () => {
                 const role = this.authService.currentUser()?.role;
-                const redirect = role === 'SUPER_ADMIN' ? '/app/super-admin' : '/app/dashboard';
+                const redirectMap: Record<string, string> = {
+                    SUPER_ADMIN: '/app/super-admin',
+                    PRODUCT_OWNER: '/app/po',
+                };
+                const redirect = redirectMap[role ?? ''] ?? '/app/dashboard';
                 this.router.navigate([redirect]);
             },
             error: (err) => {

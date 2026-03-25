@@ -15,12 +15,7 @@ export class AuthService {
 
   currentUser = signal<User | null>(null);
 
-  constructor(private http: HttpClient, private router: Router) {
-    const token = this.getToken();
-    if (token) {
-      this.fetchMe().subscribe({ error: () => this.clearSession() });
-    }
-  }
+  constructor(private http: HttpClient, private router: Router) {}
 
   login(credentials: LoginRequest): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${this.API}/login`, credentials).pipe(
@@ -39,7 +34,7 @@ export class AuthService {
   logout(): void {
     this.http.post(`${this.API}/logout`, {}).subscribe();
     this.clearSession();
-    this.router.navigate(['/login']);
+    this.router.navigate(['/auth/login']);
   }
 
   fetchMe(): Observable<AuthResponse> {
@@ -66,7 +61,7 @@ export class AuthService {
     if (this.isBrowser) localStorage.setItem(this.TOKEN_KEY, token);
   }
 
-  private clearSession(): void {
+  clearSession(): void {
     if (this.isBrowser) localStorage.removeItem(this.TOKEN_KEY);
     this.currentUser.set(null);
   }

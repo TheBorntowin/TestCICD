@@ -259,9 +259,9 @@ export class UsersComponent implements OnInit {
   get availableRoles(): string[] {
     const currentRole = this.authService.currentUser()?.role;
     if (currentRole === 'SUPER_ADMIN') {
-      return ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EMPLOYEE', 'VIEWER'];
+      return ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EMPLOYEE', 'TUTOR', 'VIEWER'];
     }
-    return ['MANAGER', 'EMPLOYEE', 'VIEWER'];
+    return ['MANAGER', 'EMPLOYEE', 'TUTOR', 'VIEWER'];
   }
 
   ngOnInit() {
@@ -351,6 +351,7 @@ export class UsersComponent implements OnInit {
       ADMIN: 'theme-yellow',
       MANAGER: 'theme-blue',
       EMPLOYEE: 'theme-green',
+      TUTOR: 'theme-purple',
       VIEWER: 'theme-cyan'
     };
     return map[role] ?? 'theme-cyan';

@@ -26,7 +26,11 @@ public class DataInitializer implements CommandLineRunner {
             new TestUser("superadmin@cmp.com", "superadmin123", "Super Admin",   User.RoleName.SUPER_ADMIN),
             new TestUser("admin@test.com",     "admin123",      "Admin User",    User.RoleName.ADMIN),
             new TestUser("manager@test.com",   "manager123",    "Manager User",  User.RoleName.MANAGER),
-            new TestUser("employee@test.com",  "employee123",   "Employee User", User.RoleName.EMPLOYEE)
+            new TestUser("tutor@test.com",        "tutor123",    "Tutor User",         User.RoleName.TUTOR),
+            new TestUser("po@test.com",           "productowner123",  "Product Owner",  User.RoleName.PRODUCT_OWNER),
+            new TestUser("student@test.com",    "student123",    "Student User",  User.RoleName.STUDENT),
+            new TestUser("viewer@test.com",     "viewer123",     "Viewer User",   User.RoleName.VIEWER),
+            new TestUser("employee@test.com",   "employee123",   "Employee User", User.RoleName.EMPLOYEE)
         );
 
         for (TestUser u : users) {

@@ -168,6 +168,10 @@ export const routes: Routes = [
                 path: "super-admin",
                 loadComponent: () => import("./pages/app/super-admin/super-admin.component").then((c) => c.SuperAdminComponent),
             },
+            {
+                path: "po",
+                loadComponent: () => import("./pages/app/po/po-dashboard.component").then((c) => c.PoDashboardComponent),
+            },
         ],
     },
     {

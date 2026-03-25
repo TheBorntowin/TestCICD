@@ -10,7 +10,7 @@ import { UserService, UserDTO } from '../../../users/user.service';
 import { AuthService } from '../../../auth/auth.service';
 
 @Component({
-  selector: 'app-super-admin',
+  selector: 'app-po-dashboard',
   standalone: true,
   imports: [CommonModule, MatCardModule, MatIconModule, MatButtonModule, MatTableModule, MatChipsModule, RouterModule],
   template: `
@@ -18,8 +18,8 @@ import { AuthService } from '../../../auth/auth.service';
       <mat-card class="bg-light-theme shadow-none pt-3 pb-lg-3 px-3">
         <div class="row gx-3 align-items-center">
           <div class="col mb-3 mb-xl-0 py-1">
-            <h3 class="mb-1">Platform Overview</h3>
-            <p class="small opacity-50">Welcome, {{ currentUser?.fullName }} — you have full platform access</p>
+            <h3 class="mb-1">Product Owner Dashboard</h3>
+            <p class="small opacity-50">Welcome, {{ currentUser?.fullName }} — manage your product backlog and team</p>
           </div>
         </div>
       </mat-card>
@@ -39,8 +39,8 @@ import { AuthService } from '../../../auth/auth.service';
                   </div>
                 </div>
                 <div class="col">
-                  <p class="small text-secondary mb-1">Total Users</p>
-                  <h3>{{ users.length }}</h3>
+                  <p class="small text-secondary mb-1">Team Members</p>
+                  <h3>{{ teamMembers.length }}</h3>
                 </div>
               </div>
             </mat-card-content>
@@ -56,8 +56,8 @@ import { AuthService } from '../../../auth/auth.service';
                   </div>
                 </div>
                 <div class="col">
-                  <p class="small text-secondary mb-1">Active Users</p>
-                  <h3>{{ activeUsers }}</h3>
+                  <p class="small text-secondary mb-1">Active Members</p>
+                  <h3>{{ activeMembers }}</h3>
                 </div>
               </div>
             </mat-card-content>
@@ -69,12 +69,12 @@ import { AuthService } from '../../../auth/auth.service';
               <div class="row gx-3 align-items-center">
                 <div class="col-auto">
                   <div class="avatar avatar-50 bg-light-theme text-theme rounded theme-yellow">
-                    <mat-icon class="material-icons-outlined">admin_panel_settings</mat-icon>
+                    <mat-icon class="material-icons-outlined">school</mat-icon>
                   </div>
                 </div>
                 <div class="col">
-                  <p class="small text-secondary mb-1">Admins</p>
-                  <h3>{{ adminUsers }}</h3>
+                  <p class="small text-secondary mb-1">Tutors</p>
+                  <h3>{{ tutorCount }}</h3>
                 </div>
               </div>
             </mat-card-content>
@@ -86,12 +86,12 @@ import { AuthService } from '../../../auth/auth.service';
               <div class="row gx-3 align-items-center">
                 <div class="col-auto">
                   <div class="avatar avatar-50 bg-light-theme text-theme rounded theme-red">
-                    <mat-icon class="material-icons-outlined">block</mat-icon>
+                    <mat-icon class="material-icons-outlined">person_search</mat-icon>
                   </div>
                 </div>
                 <div class="col">
-                  <p class="small text-secondary mb-1">Inactive Users</p>
-                  <h3>{{ users.length - activeUsers }}</h3>
+                  <p class="small text-secondary mb-1">Students</p>
+                  <h3>{{ studentCount }}</h3>
                 </div>
               </div>
             </mat-card-content>
@@ -99,7 +99,7 @@ import { AuthService } from '../../../auth/auth.service';
         </div>
       </div>
 
-      <!-- Users by Role -->
+      <!-- Team table + Role distribution -->
       <div class="row gx-3 gx-lg-4">
         <div class="col-12 col-lg-8">
           <mat-card class="mb-3 mb-lg-4">
@@ -112,11 +112,11 @@ import { AuthService } from '../../../auth/auth.service';
                     </div>
                   </div>
                   <div class="col mb-3">
-                    <h3 class="mb-1">All Platform Users</h3>
-                    <p class="text-secondary small">Every registered account across the platform</p>
+                    <h3 class="mb-1">Team Overview</h3>
+                    <p class="text-secondary small">All members in your scope</p>
                   </div>
                   <div class="col-auto mb-3">
-                    <a mat-stroked-button routerLink="/app/users">Manage Users</a>
+                    <a mat-stroked-button routerLink="/app/users">Manage Team</a>
                   </div>
                 </div>
               </div>
@@ -124,7 +124,7 @@ import { AuthService } from '../../../auth/auth.service';
 
             <table mat-table [dataSource]="dataSource" class="bg-none mb-3 responsive-table">
               <ng-container matColumnDef="user">
-                <th mat-header-cell *matHeaderCellDef>User</th>
+                <th mat-header-cell *matHeaderCellDef>Member</th>
                 <td mat-cell *matCellDef="let u" class="py-2">
                   <div class="row gx-3 align-items-center">
                     <div class="col-auto">
@@ -162,7 +162,7 @@ import { AuthService } from '../../../auth/auth.service';
             </table>
 
             <mat-card-content>
-              <p class="text-secondary small text-center" *ngIf="users.length === 0">No users found.</p>
+              <p class="text-secondary small text-center" *ngIf="teamMembers.length === 0">No team members found.</p>
             </mat-card-content>
           </mat-card>
         </div>
@@ -173,7 +173,7 @@ import { AuthService } from '../../../auth/auth.service';
             <mat-card-header>
               <div class="col mb-3">
                 <h3 class="mb-1">Role Distribution</h3>
-                <p class="text-secondary small">Users per role</p>
+                <p class="text-secondary small">Members per role</p>
               </div>
             </mat-card-header>
             <mat-card-content>
@@ -184,7 +184,7 @@ import { AuthService } from '../../../auth/auth.service';
                 </div>
                 <div class="progress" style="height:6px; border-radius:4px; background:#f0f0f0">
                   <div class="progress-bar" [ngClass]="getProgressClass(r.role)"
-                       [style.width.%]="users.length ? (r.count / users.length) * 100 : 0"
+                       [style.width.%]="teamMembers.length ? (r.count / teamMembers.length) * 100 : 0"
                        style="border-radius:4px; transition: width 0.5s ease">
                   </div>
                 </div>
@@ -201,49 +201,51 @@ import { AuthService } from '../../../auth/auth.service';
     .progress-bar { height: 6px; }
   `]
 })
-export class SuperAdminComponent implements OnInit {
+export class PoDashboardComponent implements OnInit {
   private userService = inject(UserService);
   private authService = inject(AuthService);
 
-  users: UserDTO[] = [];
+  teamMembers: UserDTO[] = [];
   dataSource = new MatTableDataSource<UserDTO>([]);
   cols = ['user', 'role', 'status', 'created'];
 
   get currentUser() { return this.authService.currentUser(); }
-  get activeUsers() { return this.users.filter(u => u.isActive).length; }
-  get adminUsers()  { return this.users.filter(u => u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').length; }
+  get activeMembers() { return this.teamMembers.filter(u => u.isActive).length; }
+  get tutorCount() { return this.teamMembers.filter(u => u.role === 'TUTOR').length; }
+  get studentCount() { return this.teamMembers.filter(u => u.role === 'STUDENT').length; }
 
   get roleStats() {
-    const roles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EMPLOYEE', 'VIEWER'];
+    const roles = ['MANAGER', 'EMPLOYEE', 'TUTOR', 'STUDENT', 'VIEWER'];
     return roles.map(role => ({
       role,
-      count: this.users.filter(u => u.role === role).length
+      count: this.teamMembers.filter(u => u.role === role).length
     })).filter(r => r.count > 0);
   }
 
   ngOnInit() {
     this.userService.getAll().subscribe({
       next: (data) => {
-        this.users = data;
-        this.dataSource.data = data;
+        // PO sees: managers, employees, tutors, students, viewers (not super_admin or admin)
+        this.teamMembers = data.filter(u =>
+          ['MANAGER', 'EMPLOYEE', 'TUTOR', 'STUDENT', 'VIEWER'].includes(u.role)
+        );
+        this.dataSource.data = this.teamMembers;
       }
     });
   }
 
   getRoleBadge(role: string): string {
     const map: Record<string, string> = {
-      SUPER_ADMIN: 'theme-red', ADMIN: 'theme-yellow',
       MANAGER: 'theme-blue', EMPLOYEE: 'theme-green',
-      TUTOR: 'theme-purple', VIEWER: 'theme-cyan'
+      TUTOR: 'theme-purple', STUDENT: 'theme-cyan', VIEWER: 'theme-cyan'
     };
     return map[role] ?? 'theme-cyan';
   }
 
   getProgressClass(role: string): string {
     const map: Record<string, string> = {
-      SUPER_ADMIN: 'bg-danger', ADMIN: 'bg-warning',
       MANAGER: 'bg-primary', EMPLOYEE: 'bg-success',
-      TUTOR: 'bg-purple', VIEWER: 'bg-info'
+      TUTOR: 'bg-purple', STUDENT: 'bg-info', VIEWER: 'bg-secondary'
     };
     return map[role] ?? 'bg-secondary';
   }
