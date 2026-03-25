@@ -32,6 +32,14 @@ public class Project {
     @JoinColumn(name = "workspace_id", nullable = false)
     private Workspace workspace;
 
+    // If this project was created from a template, store the template id and relation
+    @Column(name = "template_id")
+    private java.util.UUID templateId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "template_id", insertable = false, updatable = false)
+    private ProjectTemplate template;
+
     // TODO: Project likely needs FK relations to Task, Sprint, or Phase entities from other modules
 
     @Column(name = "created_by", nullable = false)

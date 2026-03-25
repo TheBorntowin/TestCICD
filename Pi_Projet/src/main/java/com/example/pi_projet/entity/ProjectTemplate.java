@@ -6,6 +6,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.SQLRestriction;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -186,6 +187,10 @@ public class ProjectTemplate {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "template", fetch = FetchType.LAZY)
+    private java.util.List<Project> derivedProjects;
 
     // ================= ENUMS =================
     public enum EstimatedEffort { LOW, MEDIUM, HIGH }
