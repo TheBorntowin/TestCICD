@@ -28,16 +28,8 @@ public class WorkspaceMemberService {
 
     @Transactional
     public WorkspaceMember add(UUID workspaceId, Long userId, WorkspaceRole role, Long requesterId) {
-        Workspace ws = workspaceService.getById(workspaceId);
-        if (!userRepo.existsById(userId)) throw new Module2Exception(NOT_FOUND, "User to add not found");
-        if (!userRepo.existsById(requesterId)) throw new Module2Exception(NOT_FOUND, "Requester user not found");
-        if (memberRepo.existsByWorkspaceIdAndUserId(workspaceId, userId)) {
-            throw new Module2Exception(CONFLICT, "User already a member of the workspace");
-        }
-        var inviter = userRepo.findById(requesterId).orElseThrow(() -> new Module2Exception(NOT_FOUND, "Requester user not found"));
-        WorkspaceMember m = WorkspaceMember.builder()
-            .workspace(ws).userId(userId).role(role).invitedByUser(inviter).build();
-        return memberRepo.save(m);
+        // delegate to WorkspaceService to ensure consistent auth/audit/quota handling
+        return workspaceService.addMember(workspaceId, userId, role, requesterId, null);
     }
 
     @Transactional

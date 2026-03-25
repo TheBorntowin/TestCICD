@@ -57,7 +57,7 @@ public class ProjectMember {
     private Instant deletedAt;
 
     public enum ProjectRole {
-        PROJECT_MANAGER, DEVELOPER, REVIEWER, OBSERVER
+        PROJECT_MANAGER, DEVELOPER, REVIEWER, OBSERVER, PROFESSOR
     }
 
     // Service-layer validation: before adding a ProjectMember, verify the userId has an active

@@ -37,13 +37,22 @@ public class ProjectService {
     private final WorkspaceService workspaceService;
     private final ProjectTemplateService templateService;
     private final com.example.pi_projet.repository.UserRepository userRepo;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private final WorkspaceQuotaHelper quotaHelper;
+    private final WorkspaceAuthHelper authHelper;
+    private final M2AuditLogService auditLogService;
 
     public Page<Project> getVisible(UUID workspaceId, Long userId, Pageable pageable) {
         return projectRepo.findVisibleToUser(workspaceId, userId, pageable);
     }
 
     public Project getById(UUID projectId, Long requesterId) {
-        return findOrThrow(projectId);
+        Project p = findOrThrow(projectId);
+        // requester must be project member
+        if (!projectMemberRepo.existsByProjectIdAndUserId(projectId, requesterId)) {
+            throw new Module2Exception(FORBIDDEN, "Requester is not a project member");
+        }
+        return p;
     }
 
     @Transactional
@@ -52,6 +61,19 @@ public class ProjectService {
                           Long requesterId) {
         if (!userRepo.existsById(requesterId)) throw new Module2Exception(NOT_FOUND, "Creator user not found");
         Workspace ws = workspaceService.getById(workspaceId);
+        // Requester must be active workspace member with admin/manager
+        if (!authHelper.isWorkspaceAdminOrManager(workspaceId, requesterId)) {
+            throw new Module2Exception(FORBIDDEN, "Only workspace admin or manager can create projects.");
+        }
+
+        // Quota check at org level
+        java.util.UUID orgId = ws.getOrganization().getId();
+        long current = quotaHelper.countActiveProjectsByOrg(orgId);
+        int maxAllowed = quotaHelper.getMaxProjectsStub(orgId);
+        if (current >= maxAllowed) {
+            throw new Module2Exception(PAYMENT_REQUIRED, String.format("Project quota exceeded: %d/%d", current, maxAllowed));
+        }
+
         Project p = Project.builder()
             .workspace(ws)
             .createdBy(requesterId)
@@ -62,8 +84,16 @@ public class ProjectService {
             .endDate(endDate)
             .build();
         p = projectRepo.save(p);
+        // assign manager or professor based on org type stub
+        // Note: ProjectRole enum does not include academic-specific roles in this module.
+        ProjectRole assigned = ProjectRole.PROJECT_MANAGER;
         projectMemberRepo.save(ProjectMember.builder()
-            .project(p).userId(requesterId).role(ProjectRole.PROJECT_MANAGER).build());
+            .project(p).userId(requesterId).role(assigned).build());
+
+        // audit log (via adapter)
+        try {
+            auditLogService.writeAudit(requesterId, orgId, "CREATE_PROJECT", "project", p.getId().toString(), null);
+        } catch (Exception ignored) {}
         return p;
     }
 
@@ -105,6 +135,20 @@ public class ProjectService {
             throw new Module2Exception(CONFLICT, "User already assigned to project");
         }
         var assigner = userRepo.findById(assignedBy).orElseThrow(() -> new Module2Exception(NOT_FOUND, "Assigner user not found"));
+
+        // check assigner permissions: project manager/professor or workspace admin
+        boolean allowed = false;
+        try {
+            var prOpt = projectMemberRepo.findByProjectIdAndUserId(projectId, assignedBy);
+            if (prOpt.isPresent()) {
+                var pr = prOpt.get();
+                if (pr.getRole() == ProjectRole.PROJECT_MANAGER || pr.getRole() == ProjectRole.PROFESSOR) allowed = true;
+            }
+        } catch (Exception ignored) {}
+        if (!allowed && !authHelper.isWorkspaceAdminOrManager(project.getWorkspace().getId(), assignedBy)) {
+            throw new Module2Exception(FORBIDDEN, "Requester lacks permission to add project members");
+        }
+        
         ProjectMember pm = ProjectMember.builder()
             .project(project).userId(userId).role(role).assignedByUser(assigner).build();
         pm = projectMemberRepo.save(pm);
@@ -127,6 +171,32 @@ public class ProjectService {
     @Transactional
     public Project changeStatus(UUID projectId, ProjectStatus status, Long requesterId) {
         Project p = findOrThrow(projectId);
+
+        // permission: project manager/professor or workspace admin
+        boolean allowed = false;
+        var pmOpt = projectMemberRepo.findByProjectIdAndUserId(projectId, requesterId);
+        if (pmOpt.isPresent()) {
+            var pm = pmOpt.get();
+            if (pm.getRole() == ProjectRole.PROJECT_MANAGER || pm.getRole() == ProjectRole.PROFESSOR) allowed = true;
+        }
+        if (!allowed && !authHelper.isWorkspaceAdminOrManager(p.getWorkspace().getId(), requesterId)) {
+            throw new Module2Exception(FORBIDDEN, "Not allowed to change project status");
+        }
+
+        // validate transition
+        java.util.Map<ProjectStatus, java.util.List<ProjectStatus>> VALID_TRANSITIONS = java.util.Map.of(
+            ProjectStatus.PLANNING, java.util.List.of(ProjectStatus.ACTIVE),
+            ProjectStatus.ACTIVE, java.util.List.of(ProjectStatus.ON_HOLD, ProjectStatus.COMPLETED),
+            ProjectStatus.ON_HOLD, java.util.List.of(ProjectStatus.ACTIVE),
+            ProjectStatus.COMPLETED, java.util.List.of(ProjectStatus.ARCHIVED),
+            ProjectStatus.ARCHIVED, java.util.List.of()
+        );
+
+        var allowedTo = VALID_TRANSITIONS.getOrDefault(p.getStatus(), java.util.List.of());
+        if (!allowedTo.contains(status)) {
+            throw new Module2Exception(BAD_REQUEST, String.format("Invalid status transition from %s to %s.", p.getStatus(), status));
+        }
+
         p.setStatus(status);
         return projectRepo.save(p);
     }
@@ -134,7 +204,18 @@ public class ProjectService {
     @Transactional
     public void delete(UUID projectId, Long requesterId) {
         Project p = findOrThrow(projectId);
-        projectRepo.delete(p);
+        // only workspace admin or project manager can archive
+        boolean allowed = false;
+        var pmOpt = projectMemberRepo.findByProjectIdAndUserId(projectId, requesterId);
+        if (pmOpt.isPresent()) {
+            var pm = pmOpt.get();
+            if (pm.getRole() == ProjectRole.PROJECT_MANAGER || pm.getRole() == ProjectRole.PROFESSOR) allowed = true;
+        }
+        if (!allowed && !authHelper.isWorkspaceAdminOrManager(p.getWorkspace().getId(), requesterId)) {
+            throw new Module2Exception(FORBIDDEN, "Not allowed to delete/archive project");
+        }
+        p.setStatus(ProjectStatus.ARCHIVED);
+        projectRepo.save(p);
     }
 
     // No access checks for static demo

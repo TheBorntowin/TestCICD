@@ -24,6 +24,7 @@ public class Module2Exception extends RuntimeException {
         NOT_FOUND,
         CONFLICT,
         FORBIDDEN,
+        PAYMENT_REQUIRED,
         BAD_REQUEST,
         VALIDATION,
         INTERNAL

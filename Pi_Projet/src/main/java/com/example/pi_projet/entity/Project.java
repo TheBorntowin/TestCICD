@@ -83,7 +83,7 @@ public class Project {
     private Instant deletedAt;
 
     public enum ProjectStatus {
-        PLANNING, ACTIVE, ON_HOLD, COMPLETED, CANCELLED
+        PLANNING, ACTIVE, ON_HOLD, COMPLETED, CANCELLED, ARCHIVED
     }
 
     public enum Visibility {

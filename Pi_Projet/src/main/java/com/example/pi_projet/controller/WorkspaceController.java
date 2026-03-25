@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/workspaces")
+@RequestMapping("/api")
 @RequiredArgsConstructor
 public class WorkspaceController {
 
@@ -26,8 +26,12 @@ public class WorkspaceController {
         return workspaceService.getByMember(userId);
     }
 
-    @GetMapping("/{id}")
-    public Workspace getById(@PathVariable UUID id) {
+    @GetMapping("/v1/workspaces/{id}")
+    public Workspace getById(@PathVariable UUID id, @RequestParam Long requesterId) {
+        // enforce requester must be a workspace member
+        if (!workspaceService.isMember(id, requesterId)) {
+            throw new com.example.pi_projet.exception.Module2Exception(com.example.pi_projet.exception.Module2Exception.ErrorCode.FORBIDDEN, "Requester is not a workspace member");
+        }
         return workspaceService.getById(id);
     }
 
@@ -35,9 +39,24 @@ public class WorkspaceController {
     @ResponseStatus(HttpStatus.CREATED)
     public Workspace create(@RequestBody Map<String, String> body) {
         return workspaceService.createWorkspace(
+            // legacy: no orgId path
+            java.util.UUID.fromString(body.getOrDefault("orgId", "00000000-0000-0000-0000-000000000000")),
             body.get("name"),
             body.get("slug"),
-            Long.parseLong(body.get("ownerId"))
+            Long.parseLong(body.get("ownerId")),
+            body.getOrDefault("ipAddress", null)
+        );
+    }
+
+    @PostMapping("/v1/organizations/{orgId}/workspaces")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Workspace createForOrg(@PathVariable java.util.UUID orgId, @RequestBody Map<String, String> body) {
+        return workspaceService.createWorkspace(
+            orgId,
+            body.get("name"),
+            body.get("slug"),
+            Long.parseLong(body.get("requesterId")),
+            body.getOrDefault("ipAddress", null)
         );
     }
 

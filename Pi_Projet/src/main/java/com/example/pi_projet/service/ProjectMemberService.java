@@ -30,19 +30,10 @@ public class ProjectMemberService {
 
     @Transactional
     public ProjectMember add(UUID projectId, Long userId, ProjectRole role, Long requesterId) {
-        var project = projectRepo.findById(projectId)
-            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Project not found"));
-        if (!userRepo.existsById(userId)) throw new Module2Exception(NOT_FOUND, "User to assign not found");
-        if (!workspaceService.isMember(project.getWorkspace().getId(), userId)) {
-            throw new Module2Exception(BAD_REQUEST, "User is not a member of the project's workspace");
-        }
-        if (memberRepo.existsByProjectIdAndUserId(projectId, userId)) {
-            throw new Module2Exception(CONFLICT, "User already assigned to project");
-        }
-        var assigner = userRepo.findById(requesterId).orElseThrow(() -> new Module2Exception(NOT_FOUND, "Requester user not found"));
-        ProjectMember pm = ProjectMember.builder()
-            .project(project).userId(userId).role(role).assignedByUser(assigner).build();
-        return memberRepo.save(pm);
+        // delegate to ProjectService which enforces permissions, workspace membership and auditing
+        projectService.assignMemberToProject(projectId, userId, role, requesterId);
+        return memberRepo.findByProjectIdAndUserId(projectId, userId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Member not found after assignment"));
     }
 
     @Transactional

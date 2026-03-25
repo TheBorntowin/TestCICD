@@ -7,6 +7,7 @@ import static com.example.pi_projet.exception.Module2Exception.ErrorCode.*;
 import com.example.pi_projet.repository.MLTeamRecommendationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -56,19 +57,27 @@ public class MLTeamRecommendationService {
     }
 
     public MLTeamRecommendation acceptRecommendation(UUID id, Long reviewerId) {
+        // Make the accept + assignment atomic
+        return acceptAndAssign(id, reviewerId);
+    }
+
+    @Transactional
+    public MLTeamRecommendation acceptAndAssign(UUID id, Long reviewerId) {
         MLTeamRecommendation rec = getByIdOrThrow(id);
         if (!userRepo.existsById(rec.getRecommendedUserId())) throw new Module2Exception(NOT_FOUND, "Recommended user not found");
         // Validate recommended user is member of project's workspace
         if (!workspaceService.isMember(rec.getProject().getWorkspace().getId(), rec.getRecommendedUserId())) {
             throw new Module2Exception(BAD_REQUEST, "Recommended user is not a member of the project's workspace");
         }
+
+        // Assign into project first (may throw Module2Exception if already assigned)
+        projectMemberService.add(rec.getProject().getId(), rec.getRecommendedUserId(), ProjectRole.DEVELOPER, reviewerId);
+
+        // Update recommendation record
         rec.setStatus(MLTeamRecommendation.RecommendationStatus.ACCEPTED);
         rec.setReviewedBy(reviewerId);
         rec.setReviewedAt(Instant.now());
-        repository.save(rec);
-        // assign into project (may throw Module2Exception if already assigned)
-        projectMemberService.add(rec.getProject().getId(), rec.getRecommendedUserId(), ProjectRole.DEVELOPER, reviewerId);
-        return rec;
+        return repository.save(rec);
     }
 
     public MLTeamRecommendation rejectRecommendation(UUID id, Long reviewerId) {
