@@ -342,8 +342,8 @@ interface WorkspaceActivity {
                                 <app-workspace-member-card
                                     [member]="member"
                                     [orgType]="normalizedOrgType()"
-                                    [canEditRole]="canEditMemberRoles()"
-                                    [canRemoveMember]="canInviteMember()"
+                                    [canEditRole]="canEditMemberRole(member)"
+                                    [canRemoveMember]="canRemoveMember(member)"
                                     (removeMember)="openMemberUnassignDialog($event)"
                                     (editRole)="openMemberRoleEditDialog($event)"></app-workspace-member-card>
                                 }
@@ -822,6 +822,11 @@ export class M2WorkspaceDetailsComponent implements OnInit {
             return;
         }
 
+        if (!this.canEditMemberRole(member)) {
+            this.snackBar.open("You cannot change your own workspace role.", "Close", { duration: 3200 });
+            return;
+        }
+
         const workspaceId = this.route.snapshot.paramMap.get("workspaceId");
         if (!workspaceId) {
             return;
@@ -858,7 +863,7 @@ export class M2WorkspaceDetailsComponent implements OnInit {
     }
 
     openMemberUnassignDialog(member: WorkspaceMember): void {
-        if (!this.canInviteMember()) {
+        if (!this.canRemoveMember(member)) {
             return;
         }
 
@@ -893,6 +898,42 @@ export class M2WorkspaceDetailsComponent implements OnInit {
                 },
             });
         });
+    }
+
+    canRemoveMember(member: WorkspaceMember): boolean {
+        if (!this.canInviteMember()) {
+            return false;
+        }
+
+        const currentUserId = this.authService.currentUser()?.id;
+        if (currentUserId && member.userId === currentUserId) {
+            return false;
+        }
+
+        const targetRole = (member.workspaceRole || "").toUpperCase();
+        if (targetRole === "OWNER") {
+            if (!this.isCurrentUserGlobalAdmin() && !this.isCurrentUserOrgAdmin()) {
+                return false;
+            }
+            if (this.ownerCount() <= 1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    canEditMemberRole(member: WorkspaceMember): boolean {
+        if (!this.canEditMemberRoles()) {
+            return false;
+        }
+
+        const currentUserId = this.authService.currentUser()?.id;
+        if (currentUserId && member.userId === currentUserId) {
+            return false;
+        }
+
+        return true;
     }
 
     backToWorkspaces(): void {

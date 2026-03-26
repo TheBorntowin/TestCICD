@@ -128,6 +128,19 @@ public class WorkspaceAuthorizationService {
         return isOrgAdmin(membership.get()) || isTutorInAcademicOrganization(user, workspace.getOrganization());
     }
 
+    public boolean canRemoveWorkspaceOwner(User user, Workspace workspace) {
+        if (isGlobalAdmin(user)) {
+            return true;
+        }
+
+        Optional<OrganizationMember> membership = findOrganizationMembership(user.getId(), workspace.getOrganization().getId());
+        if (membership.isEmpty()) {
+            return false;
+        }
+
+        return isOrgAdmin(membership.get());
+    }
+
     public boolean canViewWorkspaceMembers(User user, Workspace workspace) {
         if (isGlobalAdmin(user)) {
             return true;

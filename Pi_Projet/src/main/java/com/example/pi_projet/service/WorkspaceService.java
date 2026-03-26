@@ -278,12 +278,29 @@ public class WorkspaceService {
         Workspace workspace = getById(workspaceId);
         User requester = userRepo.findById(requesterId)
             .orElseThrow(() -> new Module2Exception(FORBIDDEN, "Missing authenticated user context"));
+
+        if (requesterId.equals(userId)) {
+            throw new Module2Exception(FORBIDDEN, "You cannot unassign yourself from this workspace.");
+        }
+
         if (!authorizationService.canInviteOrAddMember(requester, workspace)) {
             throw new Module2Exception(FORBIDDEN, "Only org owner/admin, manager, or tutor can remove members.");
         }
 
         WorkspaceMember m = memberRepo.findByWorkspaceIdAndUserId(workspaceId, userId)
             .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Workspace member not found"));
+
+        if (m.getRole() == WorkspaceRole.OWNER) {
+            if (!authorizationService.canRemoveWorkspaceOwner(requester, workspace)) {
+                throw new Module2Exception(FORBIDDEN, "Only org owner/admin or global admin can remove workspace owners.");
+            }
+
+            long ownerCount = memberRepo.countByWorkspaceIdAndRole(workspaceId, WorkspaceRole.OWNER);
+            if (ownerCount <= 1) {
+                throw new Module2Exception(FORBIDDEN, "Cannot remove the last workspace owner.");
+            }
+        }
+
         memberRepo.delete(m);
     }
 

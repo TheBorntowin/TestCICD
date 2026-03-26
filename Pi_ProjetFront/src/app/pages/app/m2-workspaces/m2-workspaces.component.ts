@@ -5,12 +5,13 @@ import { FormsModule } from "@angular/forms";
 import { Router, RouterLink } from "@angular/router";
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
-import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from "@angular/material/dialog";
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 import { MatMenuModule } from "@angular/material/menu";
 import { MatSelectModule } from "@angular/material/select";
+import { MatStepperModule } from "@angular/material/stepper";
 import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { MatTableModule } from "@angular/material/table";
 import { AuthService } from "../../../auth/auth.service";
@@ -33,57 +34,186 @@ interface M2CreateWorkspaceDialogData {
     organizationOptions: OrganizationOption[];
     defaultOrganizationId?: string | null;
     defaultOrganizationName?: string | null;
+    defaultOrganizationType?: string | null;
+    defaultMembershipRole?: string | null;
 }
 
 @Component({
     selector: "app-m2-create-workspace-dialog",
     standalone: true,
-    imports: [CommonModule, FormsModule, MatCardModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+    imports: [CommonModule, FormsModule, MatCardModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatStepperModule],
     template: `
-        <div class="p-3 p-lg-4">
-            <div class="d-flex align-items-center mb-3">
+        <div class="create-shell p-3 p-lg-4">
+            <div class="d-flex align-items-center mb-3 pb-1 border-bottom">
                 <h3 class="mb-0 flex-grow-1">Create Workspace</h3>
                 <button matIconButton (click)="close()"><mat-icon class="material-icons-outlined">close</mat-icon></button>
             </div>
 
-            <div class="row gx-3">
-                <div class="col-12 mb-3">
-                    <mat-form-field appearance="outline" class="w-100">
-                        <mat-label>Workspace Name</mat-label>
-                        <input matInput [(ngModel)]="name" placeholder="Ex: Data Engineering" />
-                    </mat-form-field>
-                </div>
-                <div class="col-12 mb-3">
-                    <mat-form-field appearance="outline" class="w-100">
-                        <mat-label>Workspace Slug (optional)</mat-label>
-                        <input matInput [(ngModel)]="slug" placeholder="Ex: data-engineering" />
-                    </mat-form-field>
-                </div>
+            <mat-stepper [linear]="true" class="workspace-stepper">
+                <mat-step [completed]="isBasicsValid()">
+                    <ng-template matStepLabel>Basics</ng-template>
 
-                @if (data?.canSelectOrganization) {
-                <div class="col-12 mb-3">
-                    <mat-form-field appearance="outline" class="w-100">
-                        <mat-label>Organization</mat-label>
-                        <mat-select [(ngModel)]="organizationId">
-                            @for (org of data?.organizationOptions || []; track org.organizationId) {
-                            <mat-option [value]="org.organizationId">{{ org.organizationName }} ({{ org.organizationSlug }})</mat-option>
-                            }
-                        </mat-select>
-                    </mat-form-field>
-                </div>
-                } @else {
-                <div class="col-12 mb-3">
-                    <p class="small text-secondary mb-0">Organization: {{ data?.defaultOrganizationName || "Current organization" }}</p>
-                </div>
-                }
-            </div>
+                    <div class="step-card mt-3">
+                        <div class="row gx-3">
+                            <div class="col-12 mb-3">
+                                <mat-form-field appearance="outline" class="w-100">
+                                    <mat-label>Workspace Name</mat-label>
+                                    <input matInput [ngModel]="name" (ngModelChange)="onNameChange(($event || '').toString())" placeholder="Ex: Data Engineering" />
+                                    <mat-hint>Use a clear team or course name.</mat-hint>
+                                </mat-form-field>
+                                @if (name.trim().length > 0 && name.trim().length < 3) {
+                                <p class="small theme-red mb-0">Workspace name should be at least 3 characters.</p>
+                                }
+                            </div>
 
-            <div class="d-flex justify-content-end gap-2">
-                <button matButton (click)="close()">Cancel</button>
-                <button matButton="filled" (click)="submit()"><mat-icon class="material-icons-outlined me-1">add_circle</mat-icon>Create Workspace</button>
-            </div>
+                            <div class="col-12 mb-2">
+                                <mat-form-field appearance="outline" class="w-100">
+                                    <mat-label>Workspace Slug</mat-label>
+                                    <input matInput [ngModel]="slug" (ngModelChange)="onSlugChange(($event || '').toString())" placeholder="Ex: data-engineering" />
+                                    <mat-hint>Lowercase letters, numbers, and hyphens only.</mat-hint>
+                                </mat-form-field>
+                                @if (!isSlugValid()) {
+                                <p class="small theme-red mb-0">Slug must match: lowercase letters, numbers and single hyphens.</p>
+                                }
+                            </div>
+
+                            <div class="col-12">
+                                <div class="preview-pill">
+                                    <span class="small text-secondary">Preview URL key</span>
+                                    <strong>{{ resolvedSlugPreview() || "(enter workspace name)" }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button matButton (click)="close()">Cancel</button>
+                        <button matButton="filled" matStepperNext [disabled]="!isBasicsValid()">Continue</button>
+                    </div>
+                </mat-step>
+
+                <mat-step [completed]="isOrganizationValid()">
+                    <ng-template matStepLabel>Organization</ng-template>
+
+                    <div class="step-card mt-3">
+                        @if (data?.canSelectOrganization) {
+                        <div class="row gx-3">
+                            <div class="col-12 mb-3">
+                                <mat-form-field appearance="outline" class="w-100">
+                                    <mat-label>Organization</mat-label>
+                                    <mat-select [(ngModel)]="organizationId">
+                                        @for (org of data?.organizationOptions || []; track org.organizationId) {
+                                        <mat-option [value]="org.organizationId">{{ org.organizationName }} ({{ org.organizationSlug }})</mat-option>
+                                        }
+                                    </mat-select>
+                                </mat-form-field>
+                                @if (!organizationId) {
+                                <p class="small text-secondary mb-0">Select the organization where this workspace will be created.</p>
+                                }
+                            </div>
+                        </div>
+                        } @else {
+                        <div class="org-shell">
+                            <p class="mb-1 fw-medium">{{ selectedOrganizationName() }}</p>
+                            <p class="small text-secondary mb-0">Creation scope is fixed to your current organization.</p>
+                        </div>
+                        }
+
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <span class="badge badge-light">Org Type: {{ selectedOrganizationType() }}</span>
+                            <span class="badge badge-light">Membership: {{ selectedMembershipRole() }}</span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button matButton matStepperPrevious>Back</button>
+                        <button matButton="filled" matStepperNext [disabled]="!isOrganizationValid()">Review</button>
+                    </div>
+                </mat-step>
+
+                <mat-step>
+                    <ng-template matStepLabel>Review</ng-template>
+
+                    <div class="step-card mt-3">
+                        <p class="small text-secondary mb-2">Please confirm before creating:</p>
+                        <div class="summary-row">
+                            <span>Name</span>
+                            <strong>{{ name.trim() }}</strong>
+                        </div>
+                        <div class="summary-row">
+                            <span>Slug</span>
+                            <strong>{{ resolvedSlugPreview() }}</strong>
+                        </div>
+                        <div class="summary-row">
+                            <span>Organization</span>
+                            <strong>{{ selectedOrganizationName() }}</strong>
+                        </div>
+                        <div class="summary-row">
+                            <span>Organization Type</span>
+                            <strong>{{ selectedOrganizationType() }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button matButton matStepperPrevious>Back</button>
+                        <button matButton="filled" [disabled]="!canSubmit()" (click)="submit()">
+                            <mat-icon class="material-icons-outlined me-1">add_circle</mat-icon>
+                            Create Workspace
+                        </button>
+                    </div>
+                </mat-step>
+            </mat-stepper>
         </div>
     `,
+    styles: [
+        `
+            .create-shell {
+                background: radial-gradient(circle at top right, rgba(0, 136, 255, 0.08), transparent 55%);
+            }
+
+            .workspace-stepper {
+                background: transparent;
+            }
+
+            .step-card {
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                border-radius: 14px;
+                padding: 14px;
+                background: #fff;
+            }
+
+            .preview-pill {
+                border: 1px dashed rgba(0, 136, 255, 0.4);
+                border-radius: 12px;
+                background: rgba(0, 136, 255, 0.06);
+                padding: 10px 12px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+            }
+
+            .org-shell {
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                border-radius: 12px;
+                padding: 12px;
+                background: #fff;
+            }
+
+            .summary-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 0;
+                border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
+            }
+
+            .summary-row:last-child {
+                border-bottom: 0;
+            }
+        `,
+    ],
 })
 export class M2CreateWorkspaceDialogComponent {
     readonly dialogRef = inject(MatDialogRef<M2CreateWorkspaceDialogComponent>);
@@ -92,11 +222,75 @@ export class M2CreateWorkspaceDialogComponent {
     name = "";
     slug = "";
     organizationId = this.data?.defaultOrganizationId || "";
+    private slugManuallyEdited = false;
+
+    onNameChange(value: string): void {
+        this.name = value;
+        if (!this.slugManuallyEdited) {
+            this.slug = this.slugify(value);
+        }
+    }
+
+    onSlugChange(value: string): void {
+        this.slug = value;
+        this.slugManuallyEdited = value.trim().length > 0;
+    }
+
+    isBasicsValid(): boolean {
+        const trimmedName = this.name.trim();
+        return trimmedName.length >= 3 && this.isSlugValid();
+    }
+
+    isOrganizationValid(): boolean {
+        if (!this.data?.canSelectOrganization) {
+            return true;
+        }
+        return !!this.organizationId;
+    }
+
+    canSubmit(): boolean {
+        return this.isBasicsValid() && this.isOrganizationValid() && !!this.resolvedSlugPreview();
+    }
+
+    isSlugValid(): boolean {
+        const candidate = this.slug.trim();
+        if (!candidate) {
+            return true;
+        }
+        return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidate);
+    }
+
+    resolvedSlugPreview(): string {
+        const custom = this.slugify(this.slug);
+        if (custom) {
+            return custom;
+        }
+        return this.slugify(this.name);
+    }
+
+    selectedOrganizationName(): string {
+        const selected = this.selectedOrganization();
+        return selected?.organizationName || this.data?.defaultOrganizationName || "Current organization";
+    }
+
+    selectedOrganizationType(): string {
+        const selected = this.selectedOrganization();
+        return (selected?.organizationType || this.data?.defaultOrganizationType || "ENTERPRISE").toUpperCase();
+    }
+
+    selectedMembershipRole(): string {
+        const selected = this.selectedOrganization();
+        return (selected?.membershipRole || this.data?.defaultMembershipRole || "MEMBER").toUpperCase();
+    }
 
     submit(): void {
+        if (!this.canSubmit()) {
+            return;
+        }
+
         const payload: M2CreateWorkspaceRequest = {
             name: this.name.trim(),
-            slug: this.slug.trim() || undefined,
+            slug: this.resolvedSlugPreview() || undefined,
             organizationId: this.data?.canSelectOrganization ? this.organizationId || undefined : undefined,
         };
         this.dialogRef.close(payload);
@@ -104,6 +298,19 @@ export class M2CreateWorkspaceDialogComponent {
 
     close(): void {
         this.dialogRef.close();
+    }
+
+    private selectedOrganization(): OrganizationOption | undefined {
+        const selectedOrgId = this.data?.canSelectOrganization ? this.organizationId : this.data?.defaultOrganizationId || "";
+        return (this.data?.organizationOptions || []).find((org) => org.organizationId === selectedOrgId);
+    }
+
+    private slugify(value: string): string {
+        return (value || "")
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
     }
 }
 
@@ -264,9 +471,7 @@ export class M2CreateWorkspaceDialogComponent {
                         <ng-container matColumnDef="actions">
                             <th mat-header-cell *matHeaderCellDef>Actions</th>
                             <td mat-cell *matCellDef="let item" class="py-2">
-                                <button matButton="filled" [disabled]="!canOpenWorkspace(item)" (click)="openWorkspaceDetails(item, $event)">
-                                    Open
-                                </button>
+                                <button matButton="filled" [disabled]="!canOpenWorkspace(item)" (click)="openWorkspaceDetails(item, $event)">Open</button>
                             </td>
                         </ng-container>
 
@@ -303,9 +508,9 @@ export class M2WorkspacesComponent implements OnInit {
         }
 
         return this.workspaces().filter((w) =>
-            w.name.toLowerCase().includes(query) ||
-            w.slug.toLowerCase().includes(query) ||
-            w.organizationName.toLowerCase().includes(query)
+            w.name.toLowerCase().includes(query)
+            || w.slug.toLowerCase().includes(query)
+            || w.organizationName.toLowerCase().includes(query)
         );
     });
 
@@ -349,12 +554,15 @@ export class M2WorkspacesComponent implements OnInit {
             return;
         }
 
+        const currentOrg = this.authService.currentOrganization();
         const isGlobalAdmin = this.permissionService.isGlobalAdmin();
-        const defaultOrgId = this.authService.currentOrganization()?.organizationId || null;
-        const defaultOrgName = this.authService.currentOrganization()?.organizationName || null;
+        const defaultOrgId = currentOrg?.organizationId || null;
+        const defaultOrgName = currentOrg?.organizationName || null;
+        const defaultOrgType = currentOrg?.organizationType || null;
+        const defaultMembershipRole = currentOrg?.membershipRole || null;
 
         const ref = this.dialog.open(M2CreateWorkspaceDialogComponent, {
-            width: "520px",
+            width: "620px",
             maxWidth: "95vw",
             autoFocus: false,
             data: {
@@ -362,6 +570,8 @@ export class M2WorkspacesComponent implements OnInit {
                 organizationOptions: this.organizationOptions(),
                 defaultOrganizationId: defaultOrgId,
                 defaultOrganizationName: defaultOrgName,
+                defaultOrganizationType: defaultOrgType,
+                defaultMembershipRole: defaultMembershipRole,
             } as M2CreateWorkspaceDialogData,
         });
 

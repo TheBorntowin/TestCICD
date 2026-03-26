@@ -1,6 +1,7 @@
 package com.example.pi_projet.repository;
 
 import com.example.pi_projet.entity.WorkspaceMember;
+import com.example.pi_projet.entity.WorkspaceMember.WorkspaceRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -18,6 +19,7 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
     boolean existsByWorkspaceIdAndUserId(UUID workspaceId, Long userId);
     List<WorkspaceMember> findAllByWorkspaceId(UUID workspaceId);
     long countByWorkspaceIdAndDeletedAtIsNull(UUID workspaceId);
+    long countByWorkspaceIdAndRole(UUID workspaceId, WorkspaceRole role);
 
     @Modifying
     @Query(value = "UPDATE workspace_members " +
