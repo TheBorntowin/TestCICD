@@ -76,16 +76,36 @@ public class WorkspaceController {
         return memberService.getAll(id, currentUser.getId());
     }
 
+    @GetMapping("/{id}/available-members")
+    public List<Map<String, Object>> getAvailableMembers(@PathVariable UUID id,
+                                                          HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
+        return memberService.getAvailableMembers(id, currentUser.getId());
+    }
+
+    @GetMapping("/{id}/members/capacity")
+    public Map<String, Object> getMemberCapacity(@PathVariable UUID id,
+                                                 HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
+        return memberService.getMemberCapacity(id, currentUser.getId());
+    }
+
     @PostMapping("/{id}/members")
     @ResponseStatus(HttpStatus.CREATED)
     public WorkspaceMember addMember(@PathVariable UUID id,
-                                     @RequestBody Map<String, String> body,
+                                     @RequestBody Map<String, Object> body,
                                      HttpServletRequest request) {
         User currentUser = requireCurrentUser(request);
-        return memberService.add(id,
-            Long.parseLong(body.get("userId")),
-            WorkspaceRole.valueOf(body.get("role")),
-            currentUser.getId());
+        Long userId = parseRequiredUserId(body.get("userId"));
+        Object roleValue = body.get("role");
+        String roleRaw = roleValue == null ? null : String.valueOf(roleValue);
+
+        return memberService.addMember(
+            id,
+            userId,
+            roleRaw,
+            currentUser.getId()
+        );
     }
 
     @PatchMapping("/{id}/members/{userId}/role")
@@ -124,6 +144,27 @@ public class WorkspaceController {
             return UUID.fromString(value);
         } catch (IllegalArgumentException ex) {
             throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Invalid organizationId UUID format");
+        }
+    }
+
+    private Long parseRequiredUserId(Object value) {
+        if (value == null) {
+            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "userId is required");
+        }
+
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+
+        String raw = String.valueOf(value);
+        if (raw.isBlank()) {
+            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "userId is required");
+        }
+
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException ex) {
+            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Invalid userId");
         }
     }
 }

@@ -1,0 +1,92 @@
+import { CommonModule } from "@angular/common";
+import { Component, Input, computed } from "@angular/core";
+import { MatCardModule } from "@angular/material/card";
+import { MatIconModule } from "@angular/material/icon";
+import { WorkspaceMember } from "./models/workspace-member.model";
+
+@Component({
+    selector: "app-workspace-member-card",
+    standalone: true,
+    imports: [CommonModule, MatCardModule, MatIconModule],
+    template: `
+        <mat-card class="mb-2">
+            <mat-card-content>
+                <div class="d-flex align-items-center">
+                    <span class="avatar avatar-40 coverimg rounded-circle align-middle me-2 bg-light-theme d-flex align-items-center justify-content-center">
+                        @if (member.avatarUrl) {
+                        <img class="w-100 h-100 rounded-circle" [src]="member.avatarUrl" [alt]="member.fullName" />
+                        } @else {
+                        <mat-icon class="material-icons-outlined">person</mat-icon>
+                        }
+                    </span>
+                    <span class="align-middle d-inline-block flex-grow-1">
+                        <p class="mb-1">{{ member.fullName }}</p>
+                        <p class="text-secondary small mb-0">{{ member.email }}</p>
+                    </span>
+                    <div class="text-end">
+                        <span class="badge badge-light" [ngClass]="roleBadgeClass()">{{ roleLabel() }}</span>
+                        <p class="text-secondary small mb-0 mt-1">Joined {{ joinedAtLabel() }}</p>
+                    </div>
+                </div>
+            </mat-card-content>
+        </mat-card>
+    `,
+})
+export class WorkspaceMemberCardComponent {
+    @Input({ required: true }) member!: WorkspaceMember;
+    @Input() orgType: string = "enterprise";
+
+    readonly normalizedOrgType = computed(() => (this.orgType || "enterprise").toLowerCase());
+
+    roleLabel(): string {
+        const role = (this.member.workspaceRole || "").toUpperCase();
+        if (this.normalizedOrgType() === "academic") {
+            if (role === "TA") {
+                return "Teaching Assistant";
+            }
+            if (role === "STUDENT") {
+                return "Student";
+            }
+            if (role === "VIEWER") {
+                return "Viewer";
+            }
+            if (role === "ADMIN") {
+                return "Admin";
+            }
+        }
+
+        if (role === "MANAGER") {
+            return "Manager";
+        }
+        if (role === "EMPLOYEE") {
+            return "Employee";
+        }
+        if (role === "VIEWER") {
+            return "Viewer";
+        }
+        if (role === "ADMIN") {
+            return "Admin";
+        }
+
+        return role || "Member";
+    }
+
+    roleBadgeClass(): string {
+        const role = (this.member.workspaceRole || "").toUpperCase();
+        if (role === "ADMIN" || role === "MANAGER" || role === "TA") {
+            return "theme-blue";
+        }
+        if (role === "EMPLOYEE" || role === "STUDENT") {
+            return "theme-green";
+        }
+        return "theme-orange";
+    }
+
+    joinedAtLabel(): string {
+        if (!this.member.joinedAt) {
+            return "-";
+        }
+        const parsed = new Date(this.member.joinedAt);
+        return Number.isNaN(parsed.getTime()) ? "-" : parsed.toLocaleDateString();
+    }
+}

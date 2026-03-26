@@ -29,6 +29,14 @@ export interface M2WorkspaceMember {
     };
 }
 
+export interface M2AvailableOrgMember {
+    userId: number;
+    fullName: string;
+    email: string;
+    avatarUrl: string;
+    orgRole: string;
+}
+
 export interface M2ProjectSummary {
     id: string;
     name: string;
@@ -70,6 +78,14 @@ export class M2WorkspaceService {
 
     getWorkspaceMembers(workspaceId: string): Observable<M2WorkspaceMember[]> {
         return this.http.get<M2WorkspaceMember[]>(`${this.base}/${workspaceId}/members`);
+    }
+
+    getAvailableMembers(workspaceId: string): Observable<M2AvailableOrgMember[]> {
+        return this.http.get<M2AvailableOrgMember[]>(`${this.base}/${workspaceId}/available-members`);
+    }
+
+    addWorkspaceMember(workspaceId: string, userId: number, role: string): Observable<M2WorkspaceMember> {
+        return this.http.post<M2WorkspaceMember>(`${this.base}/${workspaceId}/members`, { userId, role });
     }
 
     getWorkspaceProjects(workspaceId: string, page = 0, size = 20): Observable<M2ProjectPage> {

@@ -34,7 +34,18 @@ public class DataInitializer implements CommandLineRunner {
             new TestUser("po@test.com",           "productowner123",  "Product Owner",  User.RoleName.PRODUCT_OWNER),
             new TestUser("student@test.com",    "student123",    "Student User",  User.RoleName.STUDENT),
             new TestUser("viewer@test.com",     "viewer123",     "Viewer User",   User.RoleName.VIEWER),
-            new TestUser("employee@test.com",   "employee123",   "Employee User", User.RoleName.EMPLOYEE)
+            new TestUser("employee@test.com",   "employee123",   "Employee User", User.RoleName.EMPLOYEE),
+
+            // Enterprise (TechCorp) additional invite-flow test users
+            new TestUser("developer1@test.com", "password123", "John Developer", User.RoleName.EMPLOYEE),
+            new TestUser("developer2@test.com", "password123", "Maria Coder", User.RoleName.EMPLOYEE),
+            new TestUser("analyst@test.com", "password123", "Sarah Analyst", User.RoleName.VIEWER),
+
+            // Academic (Engineering Faculty) additional invite-flow test users
+            new TestUser("student1@test.com", "password123", "Ahmed Student", User.RoleName.STUDENT),
+            new TestUser("student2@test.com", "password123", "Leila Benali", User.RoleName.STUDENT),
+            // TA role is not available in User.RoleName, use STUDENT at user level.
+            new TestUser("ta@test.com", "password123", "Karim TA", User.RoleName.STUDENT)
         );
 
         for (TestUser u : users) {

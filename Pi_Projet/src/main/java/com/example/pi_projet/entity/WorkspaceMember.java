@@ -59,7 +59,7 @@ public class WorkspaceMember {
     private Instant deletedAt;
 
     public enum WorkspaceRole {
-        OWNER, ADMIN, MANAGER, MEMBER, VIEWER
+        OWNER, ADMIN, MANAGER, EMPLOYEE, TA, STUDENT, MEMBER, VIEWER
     }
 
     // Service-layer note: when soft-deleting a WorkspaceMember, also soft-delete all ProjectMember

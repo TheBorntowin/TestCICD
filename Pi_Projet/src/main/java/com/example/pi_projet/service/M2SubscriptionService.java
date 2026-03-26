@@ -15,18 +15,41 @@ import java.util.UUID;
 public class M2SubscriptionService {
     private final JdbcTemplate jdbcTemplate;
 
-    // Try to read from a subscription or plan limits table; fall back to defaults
-    public int getMaxWorkspacesForOrg(UUID orgId) {
+    // Try to read from active subscription plan first, then legacy limits shape.
+    public Integer getMaxWorkspacesForOrg(UUID orgId) {
+        try {
+            Integer v = jdbcTemplate.queryForObject(
+                """
+                SELECT p.max_workspaces
+                FROM subscriptions s
+                JOIN plans p ON p.id = s.plan_id
+                WHERE s.org_id = ?
+                  AND UPPER(CAST(s.status AS VARCHAR(20))) IN ('ACTIVE','TRIALING')
+                ORDER BY s.updated_at DESC, s.created_at DESC
+                LIMIT 1
+                """,
+                Integer.class,
+                orgId.toString()
+            );
+            if (v != null && v > 0) {
+                return v;
+            }
+        } catch (Exception ignored) {
+            // fallback to legacy limits table
+        }
+
         try {
             Integer v = jdbcTemplate.queryForObject(
                 "SELECT max_workspaces FROM subscription_limits WHERE org_id = ?",
-                Integer.class, orgId.toString());
-            if (v != null) return v;
+                Integer.class,
+                orgId.toString());
+            if (v != null && v > 0) {
+                return v;
+            }
         } catch (Exception ignored) {
-            // Table may not exist in this module; fallback
+            // no persisted limits available
         }
-        // TODO [CROSS-MODULE DEPENDENCY] — Replace fallback with Module 6 integration
-        return 3;
+        return null;
     }
 
     public int getMaxProjectsForOrg(UUID orgId) {
@@ -39,5 +62,63 @@ public class M2SubscriptionService {
         }
         // TODO [CROSS-MODULE DEPENDENCY] — Replace fallback with Module 6 integration
         return 10;
+    }
+
+    public Integer getMaxMembersPerWorkspaceForOrg(UUID orgId) {
+        try {
+            Integer v = jdbcTemplate.queryForObject(
+                """
+                SELECT p.max_members_per_ws
+                FROM subscriptions s
+                JOIN plans p ON p.id = s.plan_id
+                WHERE s.org_id = ?
+                  AND UPPER(CAST(s.status AS VARCHAR(20))) IN ('ACTIVE','TRIALING')
+                ORDER BY s.updated_at DESC, s.created_at DESC
+                LIMIT 1
+                """,
+                Integer.class,
+                orgId.toString()
+            );
+            if (v != null && v > 0) {
+                return v;
+            }
+        } catch (Exception ignored) {
+            // fallback to alternative shapes below
+        }
+
+        try {
+            Integer v = jdbcTemplate.queryForObject(
+                "SELECT max_members FROM subscription_limits WHERE org_id = ?",
+                Integer.class,
+                orgId.toString()
+            );
+            if (v != null && v > 0) {
+                return v;
+            }
+        } catch (Exception ignored) {
+            // fallback to subscription-plan join
+        }
+
+        return null;
+    }
+
+    public String getPlanNameForOrg(UUID orgId) {
+        try {
+            return jdbcTemplate.queryForObject(
+                """
+                SELECT COALESCE(NULLIF(p.display_name, ''), p.name)
+                FROM subscriptions s
+                JOIN plans p ON p.id = s.plan_id
+                WHERE s.org_id = ?
+                  AND UPPER(CAST(s.status AS VARCHAR(20))) IN ('ACTIVE','TRIALING')
+                ORDER BY s.updated_at DESC, s.created_at DESC
+                LIMIT 1
+                """,
+                String.class,
+                orgId.toString()
+            );
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

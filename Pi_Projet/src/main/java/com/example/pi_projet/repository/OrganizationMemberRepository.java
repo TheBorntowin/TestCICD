@@ -8,4 +8,10 @@ import java.util.UUID;
 
 public interface OrganizationMemberRepository extends JpaRepository<OrganizationMember, UUID> {
     List<OrganizationMember> findAllByUserIdAndDeletedAtIsNull(Long userId);
+
+    List<OrganizationMember> findAllByOrganization_IdAndDeletedAtIsNull(UUID organizationId);
+
+    long countByOrganization_IdAndDeletedAtIsNull(UUID organizationId);
+
+    boolean existsByOrganization_IdAndUserIdAndDeletedAtIsNull(UUID organizationId, Long userId);
 }

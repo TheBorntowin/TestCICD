@@ -2,6 +2,12 @@ import { Injectable, computed, inject } from "@angular/core";
 import { AuthService } from "../../../auth/auth.service";
 import { M2WorkspaceMember } from "./m2-workspace.service";
 
+type WorkspaceMemberLike = M2WorkspaceMember | {
+    userId: number;
+    role?: string;
+    workspaceRole?: string;
+};
+
 @Injectable({ providedIn: "root" })
 export class WorkspacePermissionService {
     private readonly authService = inject(AuthService);
@@ -21,17 +27,22 @@ export class WorkspacePermissionService {
         return !!workspaceId && !!this.authService.currentUser();
     }
 
-    getWorkspaceRoleForCurrentUser(members: M2WorkspaceMember[]): string | null {
+    getWorkspaceRoleForCurrentUser(members: WorkspaceMemberLike[]): string | null {
         const userId = this.authService.currentUser()?.id;
         if (!userId) {
             return null;
         }
 
         const member = members.find((m) => m.userId === userId);
-        return member?.role?.toUpperCase() || null;
+        if (!member) {
+            return null;
+        }
+
+        const role = "workspaceRole" in member ? member.workspaceRole : member.role;
+        return (role || "").toUpperCase() || null;
     }
 
-    canManageWorkspace(members: M2WorkspaceMember[]): boolean {
+    canManageWorkspace(members: WorkspaceMemberLike[]): boolean {
         if (this.canManageByRole()) {
             return true;
         }
@@ -40,7 +51,7 @@ export class WorkspacePermissionService {
         return workspaceRole === "OWNER" || workspaceRole === "ADMIN" || workspaceRole === "MANAGER";
     }
 
-    isReadOnlyWorkspace(members: M2WorkspaceMember[]): boolean {
+    isReadOnlyWorkspace(members: WorkspaceMemberLike[]): boolean {
         const isWorkspaceMember = !!this.getWorkspaceRoleForCurrentUser(members);
         return isWorkspaceMember && !this.canManageWorkspace(members);
     }

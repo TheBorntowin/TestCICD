@@ -49,6 +49,24 @@ public class M2DevSeedService {
             .orElseThrow(() -> new IllegalStateException("Missing user 201/tutor@test.com"));
         User student = findUser(202L, "student@test.com")
             .orElseThrow(() -> new IllegalStateException("Missing user 202/student@test.com"));
+        User employee = findUser(302L, "employee@test.com")
+            .orElseThrow(() -> new IllegalStateException("Missing user 302/employee@test.com"));
+        User viewer = findUser(301L, "viewer@test.com")
+            .orElseThrow(() -> new IllegalStateException("Missing user 301/viewer@test.com"));
+
+        User developer1 = findUserByEmail("developer1@test.com")
+            .orElseThrow(() -> new IllegalStateException("Missing user developer1@test.com"));
+        User developer2 = findUserByEmail("developer2@test.com")
+            .orElseThrow(() -> new IllegalStateException("Missing user developer2@test.com"));
+        User analyst = findUserByEmail("analyst@test.com")
+            .orElseThrow(() -> new IllegalStateException("Missing user analyst@test.com"));
+
+        User student1 = findUserByEmail("student1@test.com")
+            .orElseThrow(() -> new IllegalStateException("Missing user student1@test.com"));
+        User student2 = findUserByEmail("student2@test.com")
+            .orElseThrow(() -> new IllegalStateException("Missing user student2@test.com"));
+        User ta = findUserByEmail("ta@test.com")
+            .orElseThrow(() -> new IllegalStateException("Missing user ta@test.com"));
 
         M2OrganizationProvisioningService.ProvisionedOrganization enterpriseProvisioned = organizationProvisioningService.ensureScenarioOrganization(
             "techcorp",
@@ -69,16 +87,33 @@ public class M2DevSeedService {
         Organization academicOrg = academicProvisioned.organization();
 
         ensureOrganizationMember(enterpriseOrg, enterpriseManager, OrganizationMember.OrganizationRole.ADMIN, enterpriseManager);
+        ensureOrganizationMember(enterpriseOrg, employee, OrganizationMember.OrganizationRole.MEMBER, enterpriseManager);
+        ensureOrganizationMember(enterpriseOrg, developer1, OrganizationMember.OrganizationRole.MEMBER, enterpriseManager);
+        ensureOrganizationMember(enterpriseOrg, developer2, OrganizationMember.OrganizationRole.MEMBER, enterpriseManager);
+        ensureOrganizationMember(enterpriseOrg, analyst, OrganizationMember.OrganizationRole.MEMBER, enterpriseManager);
+
         ensureOrganizationMember(academicOrg, tutor, OrganizationMember.OrganizationRole.MEMBER, tutor);
         ensureOrganizationMember(academicOrg, student, OrganizationMember.OrganizationRole.MEMBER, tutor);
+        ensureOrganizationMember(academicOrg, viewer, OrganizationMember.OrganizationRole.MEMBER, tutor);
+        ensureOrganizationMember(academicOrg, student1, OrganizationMember.OrganizationRole.MEMBER, tutor);
+        ensureOrganizationMember(academicOrg, student2, OrganizationMember.OrganizationRole.MEMBER, tutor);
+        ensureOrganizationMember(academicOrg, ta, OrganizationMember.OrganizationRole.MEMBER, tutor);
 
         Workspace enterpriseDefault = enterpriseProvisioned.defaultWorkspace();
         Workspace academicDefault = academicProvisioned.defaultWorkspace();
 
         ensureWorkspaceMember(enterpriseDefault, enterpriseManager.getId(), WorkspaceMember.WorkspaceRole.OWNER, null, "owner");
+        ensureWorkspaceMember(enterpriseDefault, employee.getId(), WorkspaceMember.WorkspaceRole.EMPLOYEE, enterpriseManager, "employee");
+        ensureWorkspaceMember(enterpriseDefault, developer1.getId(), WorkspaceMember.WorkspaceRole.EMPLOYEE, enterpriseManager, "employee");
+        ensureWorkspaceMember(enterpriseDefault, developer2.getId(), WorkspaceMember.WorkspaceRole.EMPLOYEE, enterpriseManager, "employee");
+        ensureWorkspaceMember(enterpriseDefault, analyst.getId(), WorkspaceMember.WorkspaceRole.VIEWER, enterpriseManager, "viewer");
 
         ensureWorkspaceMember(academicDefault, tutor.getId(), WorkspaceMember.WorkspaceRole.OWNER, null, "professor");
         ensureWorkspaceMember(academicDefault, student.getId(), WorkspaceMember.WorkspaceRole.MEMBER, tutor, "student");
+        ensureWorkspaceMember(academicDefault, viewer.getId(), WorkspaceMember.WorkspaceRole.STUDENT, tutor, "student");
+        ensureWorkspaceMember(academicDefault, student1.getId(), WorkspaceMember.WorkspaceRole.STUDENT, tutor, "student");
+        ensureWorkspaceMember(academicDefault, student2.getId(), WorkspaceMember.WorkspaceRole.STUDENT, tutor, "student");
+        ensureWorkspaceMember(academicDefault, ta.getId(), WorkspaceMember.WorkspaceRole.TA, tutor, "ta");
 
         ProjectTemplate enterpriseTemplate = ensureTemplate(
             enterpriseOrg,
@@ -111,6 +146,21 @@ public class M2DevSeedService {
         out.put("academicTemplateId", academicTemplate.getId());
         out.put("enterpriseProjectId", enterpriseProject.getId());
         out.put("academicProjectId", academicProject.getId());
+        out.put("enterpriseInviteCandidate", employee.getEmail());
+        out.put("academicInviteCandidate", viewer.getEmail());
+        out.put("enterpriseSeedUsers", java.util.List.of(
+            employee.getEmail(),
+            developer1.getEmail(),
+            developer2.getEmail(),
+            analyst.getEmail()
+        ));
+        out.put("academicSeedUsers", java.util.List.of(
+            student.getEmail(),
+            student1.getEmail(),
+            student2.getEmail(),
+            ta.getEmail(),
+            viewer.getEmail()
+        ));
         out.put("message", "Module 2 dev seed completed");
 
         return out;
@@ -121,6 +171,10 @@ public class M2DevSeedService {
         if (byId.isPresent()) {
             return byId;
         }
+        return userRepository.findByEmail(email);
+    }
+
+    private Optional<User> findUserByEmail(String email) {
         return userRepository.findByEmail(email);
     }
 

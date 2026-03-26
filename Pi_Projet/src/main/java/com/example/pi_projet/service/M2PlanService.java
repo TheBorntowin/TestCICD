@@ -14,11 +14,14 @@ public class M2PlanService {
 
     public PlanLimits getPlanLimits(UUID orgId, String orgType) {
         if (orgType != null && "academic".equalsIgnoreCase(orgType)) {
-            return new PlanLimits("ACADEMIC", 999, 200);
+            return new PlanLimits("ACADEMIC", 999, 999);
         }
 
-        // Hardcoded test defaults for enterprise-like organizations.
-        return new PlanLimits("PROFESSIONAL", 10, 100);
+        if (orgType != null && "enterprise".equalsIgnoreCase(orgType)) {
+            return new PlanLimits("PROFESSIONAL", 10, 50);
+        }
+
+        return new PlanLimits("FREE", 1, 5);
     }
 
     public record PlanLimits(String planName, int maxWorkspaces, int maxMembersPerWorkspace) {

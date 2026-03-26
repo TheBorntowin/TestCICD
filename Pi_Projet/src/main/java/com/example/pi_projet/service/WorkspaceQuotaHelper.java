@@ -3,6 +3,7 @@ package com.example.pi_projet.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.UUID;
 
@@ -40,16 +41,16 @@ public class WorkspaceQuotaHelper {
     }
 
     public int getMaxWorkspacesStub(UUID orgId) {
+        String orgType = getOrgTypeStub(orgId);
         try {
-            String orgType = getOrgTypeStub(orgId);
-            return m2PlanService.getPlanLimits(orgId, orgType).maxWorkspaces();
-        } catch (Exception ignored) {
-            try {
-                return m2SubscriptionService.getMaxWorkspacesForOrg(orgId);
-            } catch (Exception fallbackIgnored) {
-                return 1; // FREE fallback
+            Integer fromSubscription = m2SubscriptionService.getMaxWorkspacesForOrg(orgId);
+            if (fromSubscription != null && fromSubscription > 0) {
+                return fromSubscription;
             }
+        } catch (Exception ignored) {
+            // fall through to hardcoded fallback policy
         }
+        return m2PlanService.getPlanLimits(orgId, orgType).maxWorkspaces();
     }
 
     public int getMaxProjectsStub(UUID orgId) {
@@ -58,6 +59,37 @@ public class WorkspaceQuotaHelper {
         } catch (Exception ignored) {
             // TODO [CROSS-MODULE DEPENDENCY] — Replace fallback with Module 6 integration
             return 10; // STATIC STUB
+        }
+    }
+
+    public int getMaxMembersPerWorkspaceStub(UUID orgId) {
+        String orgType = getOrgTypeStub(orgId);
+        try {
+            Integer fromSubscription = m2SubscriptionService.getMaxMembersPerWorkspaceForOrg(orgId);
+            if (fromSubscription != null && fromSubscription > 0) {
+                return fromSubscription;
+            }
+        } catch (Exception ignored) {
+            // fallback to local plan adapter
+        }
+        return m2PlanService.getPlanLimits(orgId, orgType).maxMembersPerWorkspace();
+    }
+
+    public String getPlanNameStub(UUID orgId) {
+        try {
+            String value = m2SubscriptionService.getPlanNameForOrg(orgId);
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        } catch (Exception ignored) {
+            // fallback to local plan adapter
+        }
+
+        String orgType = getOrgTypeStub(orgId);
+        try {
+            return m2PlanService.getPlanLimits(orgId, orgType).planName();
+        } catch (Exception ignored) {
+            return "UNKNOWN";
         }
     }
 }

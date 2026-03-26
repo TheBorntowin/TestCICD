@@ -95,19 +95,22 @@ public class WorkspaceService {
         UUID orgId = resolveTargetOrganizationIdForCreate(currentUser, requestedOrgId);
         String orgType = quotaHelper.getOrgTypeStub(orgId);
 
+        long currentCount = quotaHelper.countActiveWorkspaces(orgId);
+        int maxAllowed = quotaHelper.getMaxWorkspacesStub(orgId);
+        if (currentCount >= maxAllowed) {
+            throw new Module2Exception(FORBIDDEN, "Workspace limit reached for your plan");
+        }
+
         if (!isGlobalAdminRole(currentUser.getRole())) {
             OrgMembershipContext membership = resolveSingleOrganizationMembership(currentUser.getId());
+            if (requestedOrgId != null && !requestedOrgId.equals(membership.orgId())) {
+                throw new Module2Exception(FORBIDDEN, "You can create workspaces only inside your organization");
+            }
             boolean hasOrganizationCreateRole = canCreateWorkspaceByOrgRole(membership.orgRole());
             boolean tutorInAcademicOrg = isTutorInAcademicOrganization(currentUser, orgType);
             if (!hasOrganizationCreateRole && !tutorInAcademicOrg) {
                 throw new Module2Exception(FORBIDDEN, "Only org admin, owner, or academic tutor can create workspaces.");
             }
-        }
-
-        long currentCount = quotaHelper.countActiveWorkspaces(orgId);
-        int maxAllowed = quotaHelper.getMaxWorkspacesStub(orgId);
-        if (currentCount >= maxAllowed) {
-            throw new Module2Exception(FORBIDDEN, "Workspace limit reached for your plan");
         }
 
         if (workspaceRepo.existsBySlugAndOrganizationId(normalizedSlug, orgId)) {
@@ -173,6 +176,12 @@ public class WorkspaceService {
 
         // Target user must be member of the organization
         UUID orgId = ws.getOrganization().getId();
+        long currentMembers = memberRepo.countByWorkspaceIdAndDeletedAtIsNull(workspaceId);
+        int maxMembers = quotaHelper.getMaxMembersPerWorkspaceStub(orgId);
+        if (currentMembers >= maxMembers) {
+            throw new Module2Exception(FORBIDDEN, "Workspace member limit reached for your plan");
+        }
+
         try {
             if (!authHelper.isWorkspaceOwnerOrAdmin(workspaceId, requesterId) && !authHelper.isOrgAdmin(orgId, requesterId)) {
                 throw new Module2Exception(FORBIDDEN, "Only org admin, workspace owner, or workspace admin can invite members.");
@@ -347,11 +356,11 @@ public class WorkspaceService {
         }
 
         OrgMembershipContext membership = resolveSingleOrganizationMembership(currentUser.getId());
-        UUID membershipOrgId = membership.orgId();
-        if (requestedOrgId != null && !requestedOrgId.equals(membershipOrgId)) {
-            throw new Module2Exception(FORBIDDEN, "You can create workspaces only inside your organization");
+        if (requestedOrgId != null) {
+            ensureOrganizationExists(requestedOrgId);
+            return requestedOrgId;
         }
-        return membershipOrgId;
+        return membership.orgId();
     }
 
     @Transactional
