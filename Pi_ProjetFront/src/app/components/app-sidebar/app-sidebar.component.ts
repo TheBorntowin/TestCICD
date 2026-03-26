@@ -173,6 +173,7 @@ export class AppSidebarComponent {
                 name: "Projects",
                 icon: "dashboard",
                 children: [
+                    { name: "Workspaces", route: "/app/workspaces", icon: "workspaces" },
                     { name: "Projects", route: "/app/projects", icon: "assignment" },
                     { name: "Project Details", route: "/app/project-details", icon: "subject" },
                     { name: "All Task", route: "/app/all-tasks", icon: "checklist" },
@@ -227,6 +228,7 @@ export class AppSidebarComponent {
             name: "Projects",
             icon: "dashboard",
             children: [
+                { name: "Workspaces", route: "/app/workspaces", icon: "workspaces" },
                 { name: "Projects", route: "/app/projects", icon: "assignment" },
                 { name: "Project Details", route: "/app/project-details", icon: "subject" },
                 { name: "All Task", route: "/app/all-tasks", icon: "checklist" },

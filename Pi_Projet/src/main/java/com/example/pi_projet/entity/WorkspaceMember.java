@@ -43,6 +43,9 @@ public class WorkspaceMember {
     @JsonIgnore
     private User invitedByUser; // nullable inviter
 
+    @Column(name = "role_id")
+    private Long roleId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
@@ -56,7 +59,7 @@ public class WorkspaceMember {
     private Instant deletedAt;
 
     public enum WorkspaceRole {
-        OWNER, ADMIN, MEMBER, VIEWER
+        OWNER, ADMIN, MANAGER, MEMBER, VIEWER
     }
 
     // Service-layer note: when soft-deleting a WorkspaceMember, also soft-delete all ProjectMember

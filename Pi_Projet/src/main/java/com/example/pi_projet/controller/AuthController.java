@@ -5,6 +5,7 @@ import com.example.pi_projet.dto.AuthResponse;
 import com.example.pi_projet.dto.LoginRequest;
 import com.example.pi_projet.entity.User;
 import com.example.pi_projet.service.AuthService;
+import com.example.pi_projet.service.OrganizationContextService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -28,6 +30,7 @@ import java.util.Optional;
 public class AuthController {
 
     private final AuthService authService;
+    private final OrganizationContextService organizationContextService;
 
     // ──────────────────────────────────────────────
     // POST /api/auth/login
@@ -132,5 +135,19 @@ public class AuthController {
                 user.getFullName(),
                 user.getRole().name()
         ));
+    }
+
+    @Authorized
+    @GetMapping("/me/organization")
+    public ResponseEntity<?> myOrganization(HttpServletRequest request) {
+        User user = (User) request.getAttribute("currentUser");
+        return ResponseEntity.ok(organizationContextService.getOrganizationContextForUser(user));
+    }
+
+    @Authorized
+    @GetMapping("/me/organizations")
+    public ResponseEntity<List<Map<String, Object>>> myOrganizations(HttpServletRequest request) {
+        User user = (User) request.getAttribute("currentUser");
+        return ResponseEntity.ok(organizationContextService.getOrganizationOptionsForUser(user));
     }
 }

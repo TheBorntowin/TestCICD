@@ -5,8 +5,11 @@ import com.example.pi_projet.entity.Project.ProjectStatus;
 import com.example.pi_projet.entity.Project.Visibility;
 import com.example.pi_projet.entity.ProjectMember;
 import com.example.pi_projet.entity.ProjectMember.ProjectRole;
+import com.example.pi_projet.entity.User;
+import com.example.pi_projet.exception.Module2Exception;
 import com.example.pi_projet.service.ProjectMemberService;
 import com.example.pi_projet.service.ProjectService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,7 +23,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/workspaces/{workspaceId}/projects")
+@RequestMapping("/api/v1/workspaces/{workspaceId}/projects")
 @RequiredArgsConstructor
 public class ProjectController {
 
@@ -29,22 +32,26 @@ public class ProjectController {
 
     @GetMapping
     public Page<Project> getAll(@PathVariable UUID workspaceId,
-                                @RequestParam Long requesterId,
+                                HttpServletRequest request,
                                 @PageableDefault(size = 20) Pageable pageable) {
-        return projectService.getVisible(workspaceId, requesterId, pageable);
+        User currentUser = requireCurrentUser(request);
+        return projectService.getVisible(workspaceId, currentUser.getId(), pageable);
     }
 
     @GetMapping("/{projectId}")
     public Project getById(@PathVariable UUID workspaceId,
                            @PathVariable UUID projectId,
-                           @RequestParam Long requesterId) {
-        return projectService.getById(projectId, requesterId);
+                           HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
+        return projectService.getById(projectId, currentUser.getId());
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Project create(@PathVariable UUID workspaceId,
-                          @RequestBody Map<String, Object> body) {
+                          @RequestBody Map<String, Object> body,
+                          HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
         return projectService.create(
             workspaceId,
             (String) body.get("name"),
@@ -52,14 +59,16 @@ public class ProjectController {
             body.get("visibility") != null ? Visibility.valueOf((String) body.get("visibility")) : Visibility.PUBLIC,
             body.get("startDate") != null ? LocalDate.parse((String) body.get("startDate")) : null,
             body.get("endDate")   != null ? LocalDate.parse((String) body.get("endDate"))   : null,
-            Long.parseLong((String) body.get("requesterId"))
+            currentUser.getId()
         );
     }
 
     @PutMapping("/{projectId}")
     public Project update(@PathVariable UUID workspaceId,
                           @PathVariable UUID projectId,
-                          @RequestBody Map<String, Object> body) {
+                          @RequestBody Map<String, Object> body,
+                          HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
         return projectService.update(
             projectId,
             (String) body.get("name"),
@@ -67,18 +76,20 @@ public class ProjectController {
             body.get("visibility") != null ? Visibility.valueOf((String) body.get("visibility")) : null,
             body.get("startDate") != null ? LocalDate.parse((String) body.get("startDate")) : null,
             body.get("endDate")   != null ? LocalDate.parse((String) body.get("endDate"))   : null,
-            Long.parseLong((String) body.get("requesterId"))
+            currentUser.getId()
         );
     }
 
     @PatchMapping("/{projectId}/status")
     public Project changeStatus(@PathVariable UUID workspaceId,
                                 @PathVariable UUID projectId,
-                                @RequestBody Map<String, String> body) {
+                                @RequestBody Map<String, String> body,
+                                HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
         return projectService.changeStatus(
             projectId,
             ProjectStatus.valueOf(body.get("status")),
-            Long.parseLong(body.get("requesterId"))
+            currentUser.getId()
         );
     }
 
@@ -86,8 +97,9 @@ public class ProjectController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID workspaceId,
                        @PathVariable UUID projectId,
-                       @RequestParam Long requesterId) {
-        projectService.delete(projectId, requesterId);
+                       HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
+        projectService.delete(projectId, currentUser.getId());
     }
 
 
@@ -96,20 +108,23 @@ public class ProjectController {
     @GetMapping("/{projectId}/members")
     public List<ProjectMember> getMembers(@PathVariable UUID workspaceId,
                                           @PathVariable UUID projectId,
-                                          @RequestParam Long requesterId) {
-        return projectMemberService.getAll(projectId, requesterId);
+                                          HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
+        return projectMemberService.getAll(projectId, currentUser.getId());
     }
 
     @PostMapping("/{projectId}/members")
     @ResponseStatus(HttpStatus.CREATED)
     public ProjectMember addMember(@PathVariable UUID workspaceId,
                                    @PathVariable UUID projectId,
-                                   @RequestBody Map<String, String> body) {
+                                   @RequestBody Map<String, String> body,
+                                   HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
         return projectMemberService.add(
             projectId,
             Long.parseLong(body.get("userId")),
             ProjectRole.valueOf(body.getOrDefault("role", "DEVELOPER")),
-            Long.parseLong(body.get("requesterId"))
+            currentUser.getId()
         );
     }
 
@@ -117,11 +132,13 @@ public class ProjectController {
     public ProjectMember updateMemberRole(@PathVariable UUID workspaceId,
                                           @PathVariable UUID projectId,
                                           @PathVariable Long userId,
-                                          @RequestBody Map<String, String> body) {
+                                          @RequestBody Map<String, String> body,
+                                          HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
         return projectMemberService.updateRole(
             projectId, userId,
             ProjectRole.valueOf(body.get("role")),
-            Long.parseLong(body.get("requesterId"))
+            currentUser.getId()
         );
     }
 
@@ -130,7 +147,16 @@ public class ProjectController {
     public void removeMember(@PathVariable UUID workspaceId,
                              @PathVariable UUID projectId,
                              @PathVariable Long userId,
-                             @RequestParam Long requesterId) {
-        projectMemberService.remove(projectId, userId, requesterId);
+                             HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
+        projectMemberService.remove(projectId, userId, currentUser.getId());
+    }
+
+    private User requireCurrentUser(HttpServletRequest request) {
+        Object user = request.getAttribute("currentUser");
+        if (!(user instanceof User currentUser)) {
+            throw new Module2Exception(Module2Exception.ErrorCode.FORBIDDEN, "Missing authenticated user context");
+        }
+        return currentUser;
     }
 }

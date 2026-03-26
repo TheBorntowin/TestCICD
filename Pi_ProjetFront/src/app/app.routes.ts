@@ -61,6 +61,14 @@ export const routes: Routes = [
                 loadComponent: () => import("./pages/app/dashboard/dashboard.component").then((c) => c.DashboardComponent),
             },
             {
+                path: "workspaces",
+                loadComponent: () => import("./pages/app/m2-workspaces/m2-workspaces.component").then((c) => c.M2WorkspacesComponent),
+            },
+            {
+                path: "workspace-details/:workspaceId",
+                loadComponent: () => import("./pages/app/m2-workspaces/m2-workspace-details.component").then((c) => c.M2WorkspaceDetailsComponent),
+            },
+            {
                 path: "projects",
                 loadComponent: () => import("./pages/app/projects/projects.component").then((c) => c.ProjectsComponent),
             },

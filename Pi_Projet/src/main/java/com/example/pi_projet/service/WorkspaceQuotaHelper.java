@@ -13,6 +13,7 @@ public class WorkspaceQuotaHelper {
     private final JdbcTemplate jdbcTemplate;
     private final M2OrganizationService m2OrganizationService;
     private final M2SubscriptionService m2SubscriptionService;
+    private final M2PlanService m2PlanService;
 
     public long countActiveWorkspaces(UUID orgId) {
         Long cnt = jdbcTemplate.queryForObject(
@@ -40,10 +41,14 @@ public class WorkspaceQuotaHelper {
 
     public int getMaxWorkspacesStub(UUID orgId) {
         try {
-            return m2SubscriptionService.getMaxWorkspacesForOrg(orgId);
+            String orgType = getOrgTypeStub(orgId);
+            return m2PlanService.getPlanLimits(orgId, orgType).maxWorkspaces();
         } catch (Exception ignored) {
-            // TODO [CROSS-MODULE DEPENDENCY] — Replace fallback with Module 6 integration
-            return 3; // STATIC STUB
+            try {
+                return m2SubscriptionService.getMaxWorkspacesForOrg(orgId);
+            } catch (Exception fallbackIgnored) {
+                return 1; // FREE fallback
+            }
         }
     }
 

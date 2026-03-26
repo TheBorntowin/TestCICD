@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.UUID;
 
 @Component
@@ -16,11 +17,21 @@ public class WorkspaceAuthHelper {
     public boolean isOrgAdmin(UUID orgId, Long userId) {
         try {
             Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM org_members WHERE org_id = ? AND user_id = ? AND org_role IN ('org_admin','academic_admin')",
+                "SELECT COUNT(*) FROM org_members WHERE organization_id = ? AND user_id = ? AND role IN ('ADMIN','OWNER') AND deleted_at IS NULL",
                 Integer.class, orgId.toString(), userId);
             return count != null && count > 0;
         } catch (Exception e) {
-            return false;
+            try {
+                Integer legacyCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM org_members WHERE org_id = ? AND user_id = ? AND org_role IN ('org_admin','academic_admin') AND deleted_at IS NULL",
+                    Integer.class,
+                    orgId.toString(),
+                    userId
+                );
+                return legacyCount != null && legacyCount > 0;
+            } catch (Exception ignored) {
+                return false;
+            }
         }
     }
 
@@ -28,15 +39,38 @@ public class WorkspaceAuthHelper {
     public String getWorkspaceRole(UUID workspaceId, Long userId) {
         try {
             return jdbcTemplate.queryForObject(
-                "SELECT r.name FROM workspace_members wm JOIN roles r ON wm.role_id = r.id WHERE wm.workspace_id = ? AND wm.user_id = ? AND wm.status = 'active'",
+                "SELECT r.name FROM workspace_members wm JOIN roles r ON r.id = wm.role_id WHERE wm.workspace_id = ? AND wm.user_id = ? AND wm.deleted_at IS NULL",
                 String.class, workspaceId.toString(), userId);
         } catch (Exception e) {
-            return null;
+            try {
+                return jdbcTemplate.queryForObject(
+                    "SELECT wm.role FROM workspace_members wm WHERE wm.workspace_id = ? AND wm.user_id = ? AND wm.deleted_at IS NULL",
+                    String.class, workspaceId.toString(), userId);
+            } catch (Exception ignored) {
+                return null;
+            }
         }
     }
 
     public boolean isWorkspaceAdminOrManager(UUID workspaceId, Long userId) {
         String role = getWorkspaceRole(workspaceId, userId);
-        return "admin".equals(role) || "manager".equals(role);
+        if (role == null) {
+            return false;
+        }
+
+        String normalized = role.toUpperCase(Locale.ROOT);
+        return "OWNER".equals(normalized)
+            || "ADMIN".equals(normalized)
+            || "MANAGER".equals(normalized);
+    }
+
+    public boolean isWorkspaceOwnerOrAdmin(UUID workspaceId, Long userId) {
+        String role = getWorkspaceRole(workspaceId, userId);
+        if (role == null) {
+            return false;
+        }
+
+        String normalized = role.toUpperCase(Locale.ROOT);
+        return "OWNER".equals(normalized) || "ADMIN".equals(normalized);
     }
 }

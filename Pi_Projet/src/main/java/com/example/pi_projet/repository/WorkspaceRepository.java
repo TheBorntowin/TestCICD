@@ -16,6 +16,9 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, UUID> {
 
     Optional<Workspace> findBySlug(String slug);
     boolean existsBySlug(String slug);
+    boolean existsBySlugAndOrganizationId(String slug, UUID organizationId);
+
+    List<Workspace> findAllByOrganizationId(UUID organizationId);
 
     @Query("""
         SELECT w FROM Workspace w
@@ -23,4 +26,14 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, UUID> {
         WHERE wm.userId = :userId AND wm.deletedAt IS NULL
         """)
     List<Workspace> findAllByMemberUserId(@Param("userId") Long userId);
+
+    @Query("""
+        SELECT w FROM Workspace w
+        JOIN WorkspaceMember wm ON wm.workspace = w
+        WHERE wm.userId = :userId
+          AND w.organization.id = :orgId
+          AND wm.deletedAt IS NULL
+        """)
+    List<Workspace> findAllByMemberUserIdAndOrganizationId(@Param("userId") Long userId,
+                                                            @Param("orgId") UUID orgId);
 }

@@ -43,6 +43,9 @@ public class Workspace {
     @JoinColumn(name = "organization_id", nullable = false)
     private Organization organization;
 
+    @Column(name = "org_type", length = 20)
+    private String orgType;
+
     @JsonIgnore
     @OneToMany(mappedBy = "workspace", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<WorkspaceMember> members;

@@ -7,6 +7,7 @@ import com.example.pi_projet.entity.ProjectMember;
 import com.example.pi_projet.entity.ProjectMember.ProjectRole;
 import com.example.pi_projet.entity.ProjectTemplate;
 import com.example.pi_projet.entity.Workspace;
+import com.example.pi_projet.entity.User;
 import com.example.pi_projet.exception.Module2Exception;
 import static com.example.pi_projet.exception.Module2Exception.ErrorCode.*;
 import com.example.pi_projet.service.ProjectTemplateService;
@@ -43,6 +44,18 @@ public class ProjectService {
     private final M2AuditLogService auditLogService;
 
     public Page<Project> getVisible(UUID workspaceId, Long userId, Pageable pageable) {
+        if (!userRepo.existsById(userId)) {
+            throw new Module2Exception(NOT_FOUND, "Requester user not found");
+        }
+
+        User requester = userRepo.findById(userId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Requester user not found"));
+
+        workspaceService.getById(workspaceId);
+        if (!isGlobalAdminRole(requester.getRole()) && !workspaceService.isMember(workspaceId, userId)) {
+            throw new Module2Exception(FORBIDDEN, "Requester is not a workspace member");
+        }
+
         return projectRepo.findVisibleToUser(workspaceId, userId, pageable);
     }
 
@@ -225,5 +238,10 @@ public class ProjectService {
 
     public void requireProjectRole(UUID projectId, Long userId, ProjectRole... allowed) {
         // No-op for static demo
+    }
+
+    private boolean isGlobalAdminRole(User.RoleName role) {
+        return role == User.RoleName.SUPER_ADMIN
+            || role == User.RoleName.ADMIN;
     }
 }

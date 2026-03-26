@@ -15,14 +15,38 @@ public class M2OrganizationService {
     private final JdbcTemplate jdbcTemplate;
 
     public String getOrgType(UUID orgId) {
+        if (orgId == null) {
+            return "enterprise";
+        }
+
+        String asText = orgId.toString();
+
         try {
             String t = jdbcTemplate.queryForObject(
                 "SELECT org_type FROM organizations WHERE id = ?",
-                String.class, orgId.toString());
-            if (t != null) return t;
+                String.class,
+                asText
+            );
+            if (t != null && !t.isBlank()) {
+                return t;
+            }
         } catch (Exception ignored) {
-            // Table may not exist here; fallback
+            // Try alternative UUID storage below.
         }
+
+        try {
+            String t = jdbcTemplate.queryForObject(
+                "SELECT org_type FROM organizations WHERE id = UUID_TO_BIN(?)",
+                String.class,
+                asText
+            );
+            if (t != null && !t.isBlank()) {
+                return t;
+            }
+        } catch (Exception ignored) {
+            // Table/function may not exist here; fallback below.
+        }
+
         // TODO [CROSS-MODULE DEPENDENCY] — Replace fallback with Module 1 OrganizationService
         return "enterprise";
     }

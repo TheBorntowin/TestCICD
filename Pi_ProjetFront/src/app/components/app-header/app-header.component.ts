@@ -87,7 +87,8 @@ import { MatFormFieldModule } from "@angular/material/form-field";
                             <figure class="avatar avatar-80 rounded-circle coverimg align-middle" style="background-image: url('assets/img/user-6.jpg')"></figure>
                         </div>
                         <h3 class="mb-0">{{ authService.currentUser()?.fullName }}</h3>
-                        <p class="opacity-75 mt-0">{{ authService.currentUser()?.role }}</p>
+                        <p class="opacity-75 mt-0 mb-1">{{ authService.currentUser()?.role }}</p>
+                        <p class="small text-secondary mb-0">Org: {{ authService.currentOrganization()?.organizationName || 'No organization' }}</p>
                     </div>
                     <button mat-menu-item routerLink="./dashboard">
                         <mat-icon class="material-icons-outlined">house</mat-icon>

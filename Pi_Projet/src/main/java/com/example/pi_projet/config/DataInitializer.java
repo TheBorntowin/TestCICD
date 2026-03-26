@@ -3,7 +3,9 @@ package com.example.pi_projet.config;
 import com.example.pi_projet.entity.User;
 import com.example.pi_projet.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +17,8 @@ import java.util.List;
  */
 @Component
 @RequiredArgsConstructor
+@Order(1)
+@Slf4j
 public class DataInitializer implements CommandLineRunner {
 
     private final UserRepository userRepository;
@@ -35,15 +39,19 @@ public class DataInitializer implements CommandLineRunner {
 
         for (TestUser u : users) {
             if (!userRepository.existsByEmail(u.email())) {
-                userRepository.save(User.builder()
-                    .email(u.email())
-                    .passwordHash(passwordEncoder.encode(u.password()))
-                    .fullName(u.fullName())
-                    .role(u.role())
-                    .isActive(true)
-                    .isVerified(true)
-                    .build());
-                System.out.println("[DataInitializer] Created: " + u.email() + " / " + u.password());
+                try {
+                    userRepository.save(User.builder()
+                        .email(u.email())
+                        .passwordHash(passwordEncoder.encode(u.password()))
+                        .fullName(u.fullName())
+                        .role(u.role())
+                        .isActive(true)
+                        .isVerified(true)
+                        .build());
+                    log.info("[DataInitializer] Created user {}", u.email());
+                } catch (Exception ex) {
+                    log.error("[DataInitializer] Failed to seed user {} with role {}", u.email(), u.role(), ex);
+                }
             }
         }
     }
