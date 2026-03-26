@@ -17,6 +17,9 @@ import { MatDialog } from "@angular/material/dialog";
 import { MatDrawer, MatSidenavModule } from "@angular/material/sidenav";
 import { CreateEditProjectModal } from "./createeditproject.component";
 import { ViewProjectDrawerComponent } from "./viewproject.component";
+import { ProjectDeleteConfirmDialogComponent } from "./project-delete-confirm-dialog.component";
+import { M2ProjectService } from "./m2-project.service";
+import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { Router } from "@angular/router";
 
 export interface TableItem {
@@ -37,7 +40,7 @@ export interface TableItem {
 @Component({
     selector: "app-projects-grid",
     standalone: true,
-    imports: [CommonModule, MatCardModule, MatIconModule, MatMenuModule, MatSidenavModule, MatTableModule, MatPaginatorModule, MatSortModule, MatButtonModule, MatFormFieldModule, FormsModule, MatListModule, MatInputModule, MatSelectModule, MatChipsModule, ViewProjectDrawerComponent],
+    imports: [CommonModule, MatCardModule, MatIconModule, MatMenuModule, MatSidenavModule, MatTableModule, MatPaginatorModule, MatSortModule, MatButtonModule, MatFormFieldModule, FormsModule, MatListModule, MatInputModule, MatSelectModule, MatChipsModule, ViewProjectDrawerComponent, MatSnackBarModule],
     template: `
         <mat-card>
             <mat-card-header>
@@ -146,16 +149,12 @@ export interface TableItem {
                         </button>
                         <mat-menu #actionsMenu="matMenu">
                             <button mat-menu-item (click)="openProject(item)">
-                                <mat-icon class="material-icons-outlined">visibility</mat-icon>
-                                <span>Open</span>
-                            </button>
-                            <button mat-menu-item (click)="openDialog(item)">
-                                <mat-icon class="material-icons-outlined">edit</mat-icon>
-                                <span>Edit</span>
+                                <mat-icon class="material-icons-outlined">open_in_new</mat-icon>
+                                <span>View Details</span>
                             </button>
                             <button mat-menu-item (click)="deleteOrder(item)">
-                                <mat-icon class="material-icons-outlined">delete</mat-icon>
-                                <span>Delete</span>
+                                <mat-icon class="material-icons-outlined">archive</mat-icon>
+                                <span>Archive</span>
                             </button>
                         </mat-menu>
                     </td>
@@ -182,8 +181,9 @@ export class ProjectsGridComponent implements OnInit {
     // mat drawer view customer
     @ViewChild("viewproject") viewproject!: MatDrawer;
 
-    // dialog
     readonly dialog = inject(MatDialog);
+    private readonly snackBar = inject(MatSnackBar);
+    private readonly projectService = inject(M2ProjectService);
     private readonly router = inject(Router);
 
     @Input() projectsData: TableItem[] | null = null;
@@ -259,8 +259,22 @@ export class ProjectsGridComponent implements OnInit {
     }
 
     deleteOrder(order: TableItem) {
-        console.log("Deleting order:", order);
-        // Logic for deleting an order goes here
+        if (!this.useRealRouting || !order.workspaceId || !order.projectUuid) return;
+        const ref = this.dialog.open(ProjectDeleteConfirmDialogComponent, {
+            width: "480px",
+            maxWidth: "95vw",
+            data: { projectName: order.name, permanent: false },
+        });
+        ref.afterClosed().subscribe((result?: { confirmed: true }) => {
+            if (!result?.confirmed) return;
+            this.projectService.archiveProject(order.workspaceId!, order.projectUuid!).subscribe({
+                next: () => {
+                    this.snackBar.open("Project archived and removed from view.", "Close", { duration: 3500 });
+                    this.dataSource.data = this.dataSource.data.filter((p) => p.projectUuid !== order.projectUuid);
+                },
+                error: () => this.snackBar.open("Failed to archive project.", "Close", { duration: 4200 }),
+            });
+        });
     }
 
     saveChanges() {

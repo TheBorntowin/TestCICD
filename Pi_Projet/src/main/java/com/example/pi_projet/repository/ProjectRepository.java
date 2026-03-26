@@ -26,4 +26,9 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
                                     @Param("userId") Long userId,
                                     Pageable pageable);
 
+    /** Hard-deletes a project row bypassing the @SQLDelete soft-delete trigger. */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM projects WHERE id = :id", nativeQuery = true)
+    void hardDeleteById(@Param("id") UUID id);
+
 }

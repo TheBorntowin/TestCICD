@@ -2,9 +2,12 @@ import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
 import { Component, CUSTOM_ELEMENTS_SCHEMA, OnInit, computed, inject, signal } from "@angular/core";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
 import { MatIconModule } from "@angular/material/icon";
+import { MatFormFieldModule } from "@angular/material/form-field";
+import { MatInputModule } from "@angular/material/input";
 import { MatDialog } from "@angular/material/dialog";
 import { MatSnackBarModule } from "@angular/material/snack-bar";
 import { MatSnackBar } from "@angular/material/snack-bar";
@@ -34,6 +37,8 @@ interface RealProjectRow {
     dueDateSort: string;
     progress: number;
     image: string;
+    // list of team members (lightweight profile)
+    members?: Array<{ userId: number; fullName: string; avatarUrl?: string }>;
 }
 
 @Component({
@@ -42,9 +47,12 @@ interface RealProjectRow {
     imports: [
         CommonModule,
         RouterLink,
+        FormsModule,
         MatCardModule,
         MatIconModule,
         MatButtonModule,
+        MatFormFieldModule,
+        MatInputModule,
         MatSnackBarModule,
         ProjectsCardsComponent,
         ProjectsGridComponent,
@@ -62,6 +70,14 @@ interface RealProjectRow {
                             Real Projects
                         </p>
                         <p class="text-secondary small mb-0 mt-1">@if (selectedWorkspaceName()) { Workspace: {{ selectedWorkspaceName() }} } @else { Open from a workspace to focus this view }</p>
+                    </div>
+
+                    <div class="col-12 col-md-auto order-3 mb-3 mb-xl-0">
+                        <mat-form-field appearance="outline" class="inline-small w-100">
+                            <mat-label>Search</mat-label>
+                            <mat-icon matPrefix>search</mat-icon>
+                            <input matInput placeholder="Project name, workspace, manager..." (input)="onSearch($event)" />
+                        </mat-form-field>
                     </div>
 
                     <div class="col-auto order-2 order-lg-3 mb-3 mb-xl-0">
@@ -110,37 +126,38 @@ interface RealProjectRow {
             </mat-card>
             }
 
-            @if (projectCardsData().length > 0) {
+            @if (selectedWorkspaceId()) {
             <div class="row gx-3 gx-lg-4">
                 <div class="col-12 col-lg-6 col-xl-4">
                     <mat-card class="bg-theme text-white mb-3 mb-lg-4">
                         <mat-card-content>
                             <h1 class="mb-3">
-                                Let's create workspace<br />
-                                for a your project
+                                Let's create a project<br />
+                                for your workspace
                             </h1>
-                            <p class="opacity-75 mb-md-4 pb-lg-2">You can start with your very new project or you can create task within your current project</p>
+                            <p class="opacity-75 mb-md-4 pb-lg-2">You can start with your very new project or you can create a task within your current project</p>
 
-                            <button matButton="elevated" (click)="openCreateProjectDialog()"><mat-icon class="material-icons-outlined">add_circle</mat-icon> Project</button>
+                            <button matButton="elevated" (click)="openCreateProjectDialog()"><mat-icon class="material-icons-outlined">add_circle</mat-icon> New Project</button>
                             <button matButton="filled" class="ms-1" disabled><mat-icon class="material-icons-outlined">add</mat-icon> New Task</button>
                         </mat-card-content>
                     </mat-card>
                 </div>
 
+                @if (highlightProjects().length > 0) {
                 <div class="col-12 col-lg-6 col-xl-4">
                     <swiper-container slides-per-view="1" space-between="20px" autoplay="false" navigation="true" class="swiper small-nav-v50">
                         @for (highlight of highlightProjects(); track highlight.id) {
                         <swiper-slide>
-                            <mat-card class="mb-3 mb-lg-4">
+                            <mat-card class="mb-3 mb-lg-4" style="cursor:pointer" (click)="openProjectByCard(highlight)">
                                 <mat-card-content class="pb-0">
                                     <div class="row gx-3 align-items-center">
                                         <div class="col-auto mb-3">
-                                            <div class="avatar avatar-80 rounded coverimg" (click)="openProjectByCard(highlight)">
+                                            <div class="avatar avatar-80 rounded coverimg">
                                                 <img [src]="highlight.image" alt="" />
                                             </div>
                                         </div>
                                         <div class="col mb-3">
-                                            <h3 class="text-theme mb-1" (click)="openProjectByCard(highlight)">{{ highlight.company }}</h3>
+                                            <h3 class="text-theme mb-1">{{ highlight.company }}</h3>
                                             <p class="mb-2">{{ highlight.name }}</p>
                                             <p class="text-secondary small">Deadline {{ highlight.dueDate }}</p>
                                         </div>
@@ -170,7 +187,7 @@ interface RealProjectRow {
                         <mat-card-header>
                             <div class="mb-3">
                                 <h3 class="mb-1">Document Updates</h3>
-                                <p class="text-secondary small">Stat tuned with recent changes</p>
+                                <p class="text-secondary small">Stay tuned with recent changes</p>
                             </div>
                         </mat-card-header>
                         <mat-card-content class="pb-0 position-relative">
@@ -195,10 +212,23 @@ interface RealProjectRow {
                         </mat-card-content>
                     </mat-card>
                 </div>
+                }
             </div>
+            }
 
-            <app-projects-cards [projectsData]="projectCardsData()" [useRealRouting]="true"></app-projects-cards>
-            <app-projects-grid [projectsData]="projectCardsData()" [useRealRouting]="true"></app-projects-grid>
+            @if (filteredProjectCardsData().length > 0) {
+            <app-projects-cards [projectsData]="filteredProjectCardsData()" [useRealRouting]="true"></app-projects-cards>
+            <app-projects-grid [projectsData]="filteredProjectCardsData()" [useRealRouting]="true"></app-projects-grid>
+            }
+
+            @if (!isLoading() && projectCardsData().length > 0 && filteredProjectCardsData().length === 0) {
+            <mat-card class="mb-3 mb-lg-4">
+                <mat-card-content class="text-center py-4">
+                    <mat-icon class="material-icons-outlined fs-1 text-secondary">search_off</mat-icon>
+                    <h3 class="mb-2 mt-2">No projects match your search</h3>
+                    <p class="text-secondary mb-0">Try a different project name, workspace, or manager.</p>
+                </mat-card-content>
+            </mat-card>
             }
         </div>
     `,
@@ -215,6 +245,7 @@ export class RealProjectsComponent implements OnInit {
     readonly lastError = signal<string | null>(null);
     readonly selectedWorkspaceId = signal("");
     readonly selectedWorkspaceName = signal("");
+    readonly selectedWorkspaceOrgType = signal("enterprise");
     readonly searchQuery = signal("");
     readonly selectedWorkspaceMembers = signal<M2WorkspaceMember[]>([]);
 
@@ -233,13 +264,24 @@ export class RealProjectsComponent implements OnInit {
             progress: row.progress,
             workspaceId: row.workspaceId,
             projectUuid: row.id,
+            // forward lightweight member profiles and team size
+            teamMembers: row.members || [],
+            teamSize: (row.members || []).length,
         }))
     );
 
-    readonly highlightProjects = computed(() => {
-        const rows = this.projectCardsData();
-        return rows.length >= 2 ? rows.slice(0, 2) : rows;
+    readonly filteredProjectCardsData = computed<ProjectCardItem[]>(() => {
+        const q = this.searchQuery().trim().toLowerCase();
+        if (!q) return this.projectCardsData();
+        return this.projectCardsData().filter(
+            (p) =>
+                p.name.toLowerCase().includes(q) ||
+                p.company.toLowerCase().includes(q) ||
+                (p.manager || "").toLowerCase().includes(q)
+        );
     });
+
+    readonly highlightProjects = computed(() => this.projectCardsData());
 
     readonly documentProjects = computed(() => {
         const rows = this.projectCardsData();
@@ -269,11 +311,12 @@ export class RealProjectsComponent implements OnInit {
         const ref = this.dialog.open(CreateProjectWorkflowDialogComponent, {
             width: "760px",
             maxWidth: "95vw",
+            maxHeight: "90vh",
             autoFocus: false,
             data: {
                 workspaceId,
                 workspaceName: this.selectedWorkspaceName() || "Workspace",
-                orgType: "enterprise",
+                orgType: this.selectedWorkspaceOrgType(),
                 members: this.selectedWorkspaceMembers().map((member) => ({
                     userId: member.userId,
                     fullName: member.user?.fullName || `User #${member.userId}`,
@@ -333,6 +376,9 @@ export class RealProjectsComponent implements OnInit {
     }
 
     teamMembersCount(project: ProjectCardItem): number {
+        if (project.teamSize !== undefined && project.teamSize !== null) {
+            return project.teamSize;
+        }
         if (!project.workspaceId) {
             return 7;
         }
@@ -484,6 +530,11 @@ export class RealProjectsComponent implements OnInit {
         const normalizedStatus = (project.status || "PLANNING").toUpperCase();
         const managerMember = this.pickManager(projectMembers);
         const managerProfile = managerMember?.userId ? profileByUserId.get(managerMember.userId) : undefined;
+        const memberProfiles = (projectMembers || []).map((m) => ({
+            userId: m.userId,
+            fullName: profileByUserId.get(m.userId)?.fullName || m.user?.fullName || `User #${m.userId}`,
+            avatarUrl: profileByUserId.get(m.userId)?.avatarUrl || m.user?.avatarUrl || "",
+        }));
 
         return {
             workspaceId: workspace.id,
@@ -500,6 +551,7 @@ export class RealProjectsComponent implements OnInit {
             dueDateSort: project.endDate || "",
             progress: this.deriveProgress(normalizedStatus),
             image: this.cardImageFor(project.id),
+            members: memberProfiles,
         };
     }
 
@@ -511,6 +563,9 @@ export class RealProjectsComponent implements OnInit {
         }).subscribe({
             next: ({ workspace, projectsPage, workspaceMembers }) => {
                 this.selectedWorkspaceName.set(workspace.name || "");
+                this.selectedWorkspaceOrgType.set(
+                    (workspace.orgType || workspace.organization?.orgType || "enterprise").toLowerCase()
+                );
                 this.selectedWorkspaceMembers.set(workspaceMembers || []);
 
                 const profileByUserId = this.buildWorkspaceProfiles(workspaceMembers);

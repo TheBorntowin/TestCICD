@@ -1,16 +1,22 @@
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
 import { Component, OnInit, computed, inject, signal } from "@angular/core";
+import { FormsModule, NgForm } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
+import { MatDividerModule } from "@angular/material/divider";
 import { MatDialog } from "@angular/material/dialog";
+import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
+import { MatInputModule } from "@angular/material/input";
+import { MatSelectModule } from "@angular/material/select";
 import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { forkJoin, of } from "rxjs";
 import { catchError } from "rxjs/operators";
 import { M2AvailableWorkspaceMember, M2ProjectMember, M2ProjectService, M2ProjectSummary } from "./m2-project.service";
-import { ProjectAddMemberModalComponent, ProjectAddMemberModalResult } from "./project-add-member-modal.component";
+import { ProjectAddMemberModalComponent } from "./project-add-member-modal.component";
+import { ProjectDeleteConfirmDialogComponent } from "./project-delete-confirm-dialog.component";
 import { ProjectMemberCardComponent } from "./project-member-card.component";
 import { ProjectMemberRoleEditDialogComponent, ProjectMemberRoleEditDialogResult } from "./project-member-role-edit-dialog.component";
 import { ProjectMemberUnassignDialogComponent, ProjectMemberUnassignDialogResult } from "./project-member-unassign-dialog.component";
@@ -33,9 +39,14 @@ interface ProjectMemberView {
     imports: [
         CommonModule,
         RouterLink,
+        FormsModule,
         MatCardModule,
         MatIconModule,
         MatButtonModule,
+        MatDividerModule,
+        MatFormFieldModule,
+        MatInputModule,
+        MatSelectModule,
         MatSnackBarModule,
         ProjectMemberCardComponent,
     ],
@@ -94,12 +105,12 @@ interface ProjectMemberView {
                 <div class="col-6 col-md-3 col-xl">
                     <mat-card class="mb-3 mb-lg-4">
                         <mat-card-content class="pb-0">
-                            <h1 class="mb-1">{{ members().length }}</h1>
-                            <p class="small text-secondary">Project Members</p>
+                            <h1 class="mb-1">{{ startDateLabel() }}</h1>
+                            <p class="small text-secondary">Start Date</p>
                             <br />
                             <div class="row gx-3 align-items-center mb-3">
-                                <div class="col-6"><p class="text-secondary">Workspace:</p></div>
-                                <div class="col"><h3>{{ workspaceName() }}</h3></div>
+                                <div class="col-6"><p class="text-secondary">Running:</p></div>
+                                <div class="col"><h3>{{ projectDurationLabel() }}</h3></div>
                             </div>
                         </mat-card-content>
                     </mat-card>
@@ -108,12 +119,12 @@ interface ProjectMemberView {
                 <div class="col-6 col-md-3 col-xl">
                     <mat-card class="mb-3 mb-lg-4">
                         <mat-card-content class="pb-0">
-                            <h1 class="mb-1">{{ availableMembers().length }}</h1>
-                            <p class="small text-secondary">Available to Add</p>
+                            <h1 class="mb-1">{{ projectStatus() }}</h1>
+                            <p class="small text-secondary">Project Status</p>
                             <br />
                             <div class="row gx-3 align-items-center mb-3">
-                                <div class="col-6"><p class="text-secondary">Org Type:</p></div>
-                                <div class="col"><h3>{{ workspaceOrgType() }}</h3></div>
+                                <div class="col-6"><p class="text-secondary">Visibility:</p></div>
+                                <div class="col"><h3>{{ projectVisibility() }}</h3></div>
                             </div>
                         </mat-card-content>
                     </mat-card>
@@ -122,12 +133,12 @@ interface ProjectMemberView {
                 <div class="col-6 col-md-3 col-xl">
                     <mat-card class="mb-3 mb-lg-4">
                         <mat-card-content class="pb-0">
-                            <h1 class="mb-1">{{ projectVisibility() }}</h1>
-                            <p class="small text-secondary">Visibility</p>
+                            <h1 class="mb-1">{{ endDateLabel() }}</h1>
+                            <p class="small text-secondary">End Date</p>
                             <br />
                             <div class="row gx-3 align-items-center mb-3">
-                                <div class="col-6"><p class="text-secondary">Status:</p></div>
-                                <div class="col"><h3>{{ projectStatus() }}</h3></div>
+                                <div class="col-6"><p class="text-secondary">Timeline:</p></div>
+                                <div class="col"><h3>{{ daysRemainingLabel() }}</h3></div>
                             </div>
                         </mat-card-content>
                     </mat-card>
@@ -136,12 +147,12 @@ interface ProjectMemberView {
                 <div class="col-6 col-md-3 col-xl">
                     <mat-card class="mb-3 mb-lg-4">
                         <mat-card-content class="pb-0">
-                            <h1 class="mb-1">{{ canManageProjects() ? "FULL" : "READ" }}</h1>
-                            <p class="small text-secondary">Access</p>
+                            <h1 class="mb-1">{{ createdAtLabel() }}</h1>
+                            <p class="small text-secondary">Created</p>
                             <br />
                             <div class="row gx-3 align-items-center mb-3">
-                                <div class="col-6"><p class="text-secondary">Created:</p></div>
-                                <div class="col"><h3>{{ createdAtLabel() }}</h3></div>
+                                <div class="col-6"><p class="text-secondary">Members:</p></div>
+                                <div class="col"><h3>{{ members().length }}</h3></div>
                             </div>
                         </mat-card-content>
                     </mat-card>
@@ -152,20 +163,117 @@ interface ProjectMemberView {
                 <div class="col-12 col-lg-4">
                     <mat-card class="mb-3 mb-lg-4">
                         <mat-card-content class="pb-0">
+                            @if (!editMode()) {
                             <h3 class="mb-1">{{ project()?.name }}</h3>
                             <p class="text-secondary small mb-2">Workspace: {{ workspaceName() }}</p>
 
                             <div class="d-flex gap-2 align-items-center mb-3">
                                 <span class="badge" [ngClass]="visibilityClass(projectVisibility())">{{ projectVisibility() }}</span>
-                                <span class="badge" [ngClass]="statusClass(projectStatus())">{{ projectStatus() }}</span>
+                                <span class="badge" [ngClass]="statusClass(projectStatus())">{{ statusLabel(projectStatus()) }}</span>
                             </div>
 
                             <p class="small mb-3">{{ project()?.description || "No description available." }}</p>
 
-                            <button matButton="filled" class="mb-3" [disabled]="!canManageProjects()" (click)="archiveProject()">
-                                <mat-icon class="material-icons-outlined">archive</mat-icon>
-                                Archive Project
-                            </button>
+                            @if (canManageProjects()) {
+                            <div class="d-flex gap-2 flex-wrap mb-3">
+                                <button matButton="filled" (click)="startEdit()">
+                                    <mat-icon class="material-icons-outlined">edit</mat-icon>
+                                    Edit Project
+                                </button>
+                                <button matButton (click)="openArchiveDialog()" style="color:#f57c00;">
+                                    <mat-icon class="material-icons-outlined">archive</mat-icon>
+                                    Archive
+                                </button>
+                                <button matButton class="theme-red" (click)="openHardDeleteDialog()">
+                                    <mat-icon class="material-icons-outlined">delete_forever</mat-icon>
+                                    Delete
+                                </button>
+                            </div>
+
+                            <mat-form-field appearance="outline" class="w-100 inline-small mb-2">
+                                <mat-label>Change Status</mat-label>
+                                <mat-select [ngModel]="project()?.status" (ngModelChange)="changeStatus($event)">
+                                    <mat-option value="PLANNING">Planning</mat-option>
+                                    <mat-option value="ACTIVE">Active</mat-option>
+                                    <mat-option value="ON_HOLD">On Hold</mat-option>
+                                    <mat-option value="COMPLETED">Completed</mat-option>
+                                    <mat-option value="CANCELLED">Cancelled</mat-option>
+                                </mat-select>
+                            </mat-form-field>
+                            }
+                            }
+
+                            @if (editMode()) {
+                            <form #editForm="ngForm">
+                            <mat-form-field appearance="outline" class="w-100 mb-2">
+                                <mat-label>Project Name</mat-label>
+                                <input matInput name="editName" [(ngModel)]="editName" required minlength="3" maxlength="150" #nameCtrl="ngModel" />
+                                <mat-hint align="end">{{ editName.length }}/150</mat-hint>
+                                @if (nameCtrl.errors?.['required']) {
+                                <mat-error>Project name is required.</mat-error>
+                                }
+                                @if (nameCtrl.errors?.['minlength']) {
+                                <mat-error>Name must be at least 3 characters long.</mat-error>
+                                }
+                            </mat-form-field>
+                            <mat-form-field appearance="outline" class="w-100 mb-2">
+                                <mat-label>Description <span class="text-secondary">(optional)</span></mat-label>
+                                <textarea matInput rows="3" name="editDescription" [(ngModel)]="editDescription" maxlength="500"></textarea>
+                                <mat-hint align="end">{{ editDescription.length }}/500</mat-hint>
+                            </mat-form-field>
+                            <div class="row gx-2">
+                                <div class="col-6">
+                                    <mat-form-field appearance="outline" class="w-100 mb-2">
+                                        <mat-label>Visibility</mat-label>
+                                        <mat-select name="editVisibility" [(ngModel)]="editVisibility">
+                                            <mat-option value="PRIVATE">Private</mat-option>
+                                            <mat-option value="PUBLIC">Public</mat-option>
+                                        </mat-select>
+                                    </mat-form-field>
+                                </div>
+                                <div class="col-6">
+                                    <mat-form-field appearance="outline" class="w-100 mb-2">
+                                        <mat-label>Status</mat-label>
+                                        <mat-select name="editStatus" [(ngModel)]="editStatus">
+                                            <mat-option value="PLANNING">Planning</mat-option>
+                                            <mat-option value="ACTIVE">Active</mat-option>
+                                            <mat-option value="ON_HOLD">On Hold</mat-option>
+                                            <mat-option value="COMPLETED">Completed</mat-option>
+                                            <mat-option value="CANCELLED">Cancelled</mat-option>
+                                        </mat-select>
+                                    </mat-form-field>
+                                </div>
+                                <div class="col-6">
+                                    <mat-form-field appearance="outline" class="w-100 mb-2">
+                                        <mat-label>Start Date</mat-label>
+                                        <input matInput type="date" name="editStartDate" [(ngModel)]="editStartDate" />
+                                    </mat-form-field>
+                                </div>
+                                <div class="col-6">
+                                    <mat-form-field appearance="outline" class="w-100 mb-2">
+                                        <mat-label>End Date</mat-label>
+                                        <input matInput type="date" name="editEndDate" [(ngModel)]="editEndDate" #endDateCtrl="ngModel" />
+                                        @if (editEndDate && editStartDate && editEndDate < editStartDate) {
+                                        <mat-error>End date must be after the start date.</mat-error>
+                                        }
+                                    </mat-form-field>
+                                </div>
+                            </div>
+                            @if (editEndDate && editStartDate && editEndDate < editStartDate) {
+                            <div class="d-flex align-items-center gap-2 mb-3 px-2 py-2 rounded" style="background:rgba(220,53,69,0.08);border:1px solid rgba(220,53,69,0.3);">
+                                <mat-icon class="material-icons-outlined theme-red" style="font-size:18px;width:18px;height:18px;">error_outline</mat-icon>
+                                <span class="small" style="color:#dc3545">End date cannot be before the start date.</span>
+                            </div>
+                            }
+                            <div class="d-flex gap-2 mb-3">
+                                <button matButton="filled" type="button" (click)="saveEdit(editForm)">
+                                    <mat-icon class="material-icons-outlined">save</mat-icon>
+                                    Save Changes
+                                </button>
+                                <button matButton type="button" (click)="cancelEdit()">Cancel</button>
+                            </div>
+                            </form>
+                            }
                         </mat-card-content>
                     </mat-card>
                 </div>
@@ -251,9 +359,18 @@ export class ProjectDetailsComponent implements OnInit {
 
     readonly isLoading = signal(true);
     readonly error = signal<string | null>(null);
+    readonly editMode = signal(false);
 
     readonly workspaceId = signal("");
     readonly projectId = signal("");
+
+    // edit form fields (two-way bound via ngModel)
+    editName = "";
+    editDescription = "";
+    editVisibility: "PUBLIC" | "PRIVATE" = "PRIVATE";
+    editStatus = "PLANNING";
+    editStartDate = "";
+    editEndDate = "";
 
     readonly project = signal<M2ProjectSummary | null>(null);
     readonly workspaceName = signal("-");
@@ -271,6 +388,50 @@ export class ProjectDetailsComponent implements OnInit {
     readonly createdAtLabel = computed(() => {
         const createdAt = this.project()?.createdAt;
         return createdAt ? new Date(createdAt).toLocaleDateString() : "-";
+    });
+
+    readonly startDateLabel = computed(() => {
+        const startDate = this.project()?.startDate;
+        return startDate ? new Date(startDate).toLocaleDateString() : "-";
+    });
+
+    readonly endDateLabel = computed(() => {
+        const endDate = this.project()?.endDate;
+        return endDate ? new Date(endDate).toLocaleDateString() : "-";
+    });
+
+    readonly daysRunning = computed(() => {
+        const startDate = this.project()?.startDate;
+        if (!startDate) return 0;
+        const start = new Date(startDate).getTime();
+        const now = Date.now();
+        if (now < start) return 0;
+        return Math.floor((now - start) / (1000 * 60 * 60 * 24));
+    });
+
+    readonly daysRemaining = computed(() => {
+        const endDate = this.project()?.endDate;
+        if (!endDate) return null;
+        const end = new Date(endDate).getTime();
+        const now = Date.now();
+        const days = Math.floor((end - now) / (1000 * 60 * 60 * 24));
+        return days;
+    });
+
+    readonly projectDurationLabel = computed(() => {
+        const days = this.daysRunning();
+        if (days === 0) return "Starting soon";
+        if (days === 1) return "1 day";
+        return `${days} days`;
+    });
+
+    readonly daysRemainingLabel = computed(() => {
+        const days = this.daysRemaining();
+        if (days === null) return "No end date";
+        if (days < 0) return "Completed";
+        if (days === 0) return "Ends today";
+        if (days === 1) return "1 day left";
+        return `${days} days left`;
     });
 
     ngOnInit(): void {
@@ -295,7 +456,10 @@ export class ProjectDetailsComponent implements OnInit {
     }
 
     backToRealProjects(): void {
-        this.router.navigate(["/app/real-projects"]);
+        const wsId = this.workspaceId();
+        this.router.navigate(["/app/real-projects"], {
+            queryParams: wsId ? { workspaceId: wsId } : {},
+        });
     }
 
     openAddMemberDialog(): void {
@@ -313,25 +477,17 @@ export class ProjectDetailsComponent implements OnInit {
             width: "560px",
             maxWidth: "95vw",
             data: {
+                workspaceId: this.workspaceId(),
+                projectId: this.projectId(),
                 orgType: this.workspaceOrgType(),
                 members: available,
             },
         });
 
-        ref.afterClosed().subscribe((result?: ProjectAddMemberModalResult) => {
-            if (!result?.userId || !result.role) {
-                return;
+        ref.afterClosed().subscribe((result?: true) => {
+            if (result) {
+                this.loadData();
             }
-
-            this.projectService.addProjectMember(this.workspaceId(), this.projectId(), result.userId, result.role).subscribe({
-                next: () => {
-                    this.snackBar.open("Project member added.", "Close", { duration: 3000 });
-                    this.loadData();
-                },
-                error: (error: HttpErrorResponse) => {
-                    this.snackBar.open(`Failed to add project member: ${this.errorMessage(error)}`, "Close", { duration: 4200 });
-                },
-            });
         });
     }
 
@@ -398,20 +554,113 @@ export class ProjectDetailsComponent implements OnInit {
         });
     }
 
-    archiveProject(): void {
-        if (!this.canManageProjects()) {
-            return;
-        }
 
-        this.projectService.archiveProject(this.workspaceId(), this.projectId()).subscribe({
-            next: () => {
-                this.snackBar.open("Project archived.", "Close", { duration: 3200 });
-                this.loadData();
+    openArchiveDialog(): void {
+        const ref = this.dialog.open(ProjectDeleteConfirmDialogComponent, {
+            width: "480px",
+            maxWidth: "95vw",
+            data: { projectName: this.project()?.name || "", permanent: false },
+        });
+        ref.afterClosed().subscribe((result?: { confirmed: true }) => {
+            if (!result?.confirmed) return;
+            this.projectService.archiveProject(this.workspaceId(), this.projectId()).subscribe({
+                next: () => {
+                    this.snackBar.open("Project archived and removed from view.", "Close", { duration: 3500 });
+                    this.backToRealProjects();
+                },
+                error: (error: HttpErrorResponse) => {
+                    this.snackBar.open(`Failed to archive project: ${this.errorMessage(error)}`, "Close", { duration: 4200 });
+                },
+            });
+        });
+    }
+
+    openHardDeleteDialog(): void {
+        const ref = this.dialog.open(ProjectDeleteConfirmDialogComponent, {
+            width: "520px",
+            maxWidth: "95vw",
+            data: { projectName: this.project()?.name || "", permanent: true },
+        });
+        ref.afterClosed().subscribe((result?: { confirmed: true }) => {
+            if (!result?.confirmed) return;
+            this.projectService.hardDeleteProject(this.workspaceId(), this.projectId()).subscribe({
+                next: () => {
+                    this.snackBar.open("Project permanently deleted.", "Close", { duration: 3500 });
+                    this.backToRealProjects();
+                },
+                error: (error: HttpErrorResponse) => {
+                    this.snackBar.open(`Failed to delete project: ${this.errorMessage(error)}`, "Close", { duration: 4200 });
+                },
+            });
+        });
+    }
+
+    startEdit(): void {
+        const p = this.project();
+        if (!p) return;
+        this.editName = p.name || "";
+        this.editDescription = p.description || "";
+        this.editVisibility = (p.visibility as "PUBLIC" | "PRIVATE") || "PRIVATE";
+        this.editStatus = p.status || "PLANNING";
+        this.editStartDate = p.startDate || "";
+        this.editEndDate = p.endDate || "";
+        this.editMode.set(true);
+    }
+
+    cancelEdit(): void {
+        this.editMode.set(false);
+    }
+
+    saveEdit(form: NgForm): void {
+        form.form.markAllAsTouched();
+        if (form.invalid) return;
+        if (this.editStartDate && this.editEndDate && this.editEndDate < this.editStartDate) return;
+
+        const body: Record<string, unknown> = {
+            name: this.editName.trim(),
+            description: this.editDescription.trim() || null,
+            visibility: this.editVisibility,
+            status: this.editStatus,
+        };
+        if (this.editStartDate) body["startDate"] = this.editStartDate;
+        if (this.editEndDate) body["endDate"] = this.editEndDate;
+
+        this.projectService.updateProject(this.workspaceId(), this.projectId(), body).subscribe({
+            next: (updated) => {
+                this.project.set(updated);
+                this.editMode.set(false);
+                this.snackBar.open("Project updated.", "Close", { duration: 3000 });
             },
             error: (error: HttpErrorResponse) => {
-                this.snackBar.open(`Failed to archive project: ${this.errorMessage(error)}`, "Close", { duration: 4200 });
+                this.snackBar.open(`Failed to update project: ${this.errorMessage(error)}`, "Close", { duration: 4200 });
             },
         });
+    }
+
+    changeStatus(newStatus: string): void {
+        if (!this.canManageProjects() || !newStatus) return;
+
+        this.projectService.changeProjectStatus(this.workspaceId(), this.projectId(), newStatus).subscribe({
+            next: (updated) => {
+                this.project.set(updated);
+                this.snackBar.open(`Status changed to ${this.statusLabel(newStatus)}.`, "Close", { duration: 3000 });
+            },
+            error: (error: HttpErrorResponse) => {
+                this.snackBar.open(`Failed to change status: ${this.errorMessage(error)}`, "Close", { duration: 4200 });
+            },
+        });
+    }
+
+    statusLabel(status: string): string {
+        const map: Record<string, string> = {
+            PLANNING: "Planning",
+            ACTIVE: "Active",
+            ON_HOLD: "On Hold",
+            COMPLETED: "Completed",
+            CANCELLED: "Cancelled",
+            ARCHIVED: "Archived",
+        };
+        return map[(status || "").toUpperCase()] || status;
     }
 
     statusClass(status: string): string {

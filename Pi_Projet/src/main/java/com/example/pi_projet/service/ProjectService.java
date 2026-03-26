@@ -171,7 +171,15 @@ public class ProjectService {
 
         String orgType = resolveWorkspaceOrgType(project.getWorkspace());
         ProjectRole finalRole = projectRoleMapper.resolveAssignmentRole(role, workspaceMember.getRole(), orgType);
-        
+
+        // If a soft-deleted record exists for this (project, user) pair, restore it instead of
+        // inserting a new row — otherwise the DB UNIQUE constraint on (project_id, user_id) would
+        // raise a 500 when re-inviting a previously removed member.
+        if (projectMemberRepo.countSoftDeleted(projectId, userId) > 0) {
+            projectMemberRepo.restoreSoftDeleted(projectId, userId, finalRole.name());
+            return project;
+        }
+
         ProjectMember pm = ProjectMember.builder()
             .project(project).userId(userId).role(finalRole).assignedByUser(assigner).build();
         pm = projectMemberRepo.save(pm);
@@ -234,6 +242,19 @@ public class ProjectService {
         }
         p.setStatus(ProjectStatus.ARCHIVED);
         projectRepo.save(p);
+    }
+
+    @Transactional
+    public void hardDelete(UUID projectId, Long requesterId) {
+        Project p = findOrThrow(projectId);
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Requester user not found"));
+        if (!projectAuthorizationService.canManageProject(requester, p)) {
+            throw new Module2Exception(FORBIDDEN, "Not allowed to permanently delete project");
+        }
+        // Hard-delete members first (bypasses soft-delete filter), then the project row itself
+        projectMemberRepo.hardDeleteAllByProjectId(projectId);
+        projectRepo.hardDeleteById(projectId);
     }
 
     // No access checks for static demo

@@ -1,13 +1,14 @@
 import { CommonModule } from "@angular/common";
-import { Component, computed, inject, signal } from "@angular/core";
-import { FormsModule } from "@angular/forms";
+import { Component, ViewChild, computed, inject, signal } from "@angular/core";
+import { FormsModule, NgForm } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
+import { provideNativeDateAdapter } from "@angular/material/core";
+import { MatDatepickerModule } from "@angular/material/datepicker";
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
-import { MatStepperModule } from "@angular/material/stepper";
 
 export interface ProjectMemberCandidate {
     userId: number;
@@ -32,6 +33,7 @@ export interface CreateProjectWorkflowDialogResult {
 @Component({
     selector: "app-create-project-workflow-dialog",
     standalone: true,
+    providers: [provideNativeDateAdapter()],
     imports: [
         CommonModule,
         FormsModule,
@@ -41,210 +43,329 @@ export interface CreateProjectWorkflowDialogResult {
         MatFormFieldModule,
         MatInputModule,
         MatSelectModule,
-        MatStepperModule,
+        MatDatepickerModule,
     ],
     template: `
-        <div class="create-shell p-3 p-lg-4">
-            <div class="d-flex align-items-center mb-3 pb-1 border-bottom">
-                <h3 class="mb-0 flex-grow-1">Create Project</h3>
+        <!-- Fixed header -->
+        <div class="dialog-header">
+            <div class="d-flex align-items-center px-4 pt-3 pb-2">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Create Project</h3>
+                    <p class="small text-secondary mb-0">{{ data.workspaceName }}</p>
+                </div>
                 <button matIconButton (click)="close()"><mat-icon class="material-icons-outlined">close</mat-icon></button>
             </div>
 
-            <mat-stepper [linear]="true" class="workspace-stepper">
-                <mat-step [completed]="isBasicsValid()">
-                    <ng-template matStepLabel>Basics</ng-template>
-
-                    <div class="step-card mt-3">
-                        <p class="small text-secondary mb-3">Workspace: {{ data.workspaceName }}</p>
-                        <div class="row gx-3">
-                            <div class="col-12 mb-3">
-                                <mat-form-field appearance="outline" class="w-100">
-                                    <mat-label>Project Name</mat-label>
-                                    <input matInput [(ngModel)]="name" placeholder="Ex: AI Automation" />
-                                    <mat-hint>Use a clear, delivery-focused project title.</mat-hint>
-                                </mat-form-field>
-                            </div>
-
-                            <div class="col-12 mb-3">
-                                <mat-form-field appearance="outline" class="w-100">
-                                    <mat-label>Description</mat-label>
-                                    <textarea matInput rows="3" [(ngModel)]="description" placeholder="What is this project about?"></textarea>
-                                </mat-form-field>
-                            </div>
-
-                            <div class="col-12 col-md-6 mb-3">
-                                <mat-form-field appearance="outline" class="w-100">
-                                    <mat-label>Visibility</mat-label>
-                                    <mat-select [(ngModel)]="visibility">
-                                        <mat-option value="PRIVATE">Private</mat-option>
-                                        <mat-option value="PUBLIC">Public</mat-option>
-                                    </mat-select>
-                                </mat-form-field>
-                            </div>
-
-                            <div class="col-12 col-md-6 mb-3">
-                                <mat-form-field appearance="outline" class="w-100">
-                                    <mat-label>Status</mat-label>
-                                    <mat-select [(ngModel)]="status">
-                                        <mat-option value="PLANNING">Planning</mat-option>
-                                        <mat-option value="ACTIVE">Active</mat-option>
-                                        <mat-option value="ON_HOLD">On Hold</mat-option>
-                                    </mat-select>
-                                </mat-form-field>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button matButton (click)="close()">Cancel</button>
-                        <button matButton="filled" matStepperNext [disabled]="!isBasicsValid()">Continue</button>
-                    </div>
-                </mat-step>
-
-                <mat-step>
-                    <ng-template matStepLabel>Schedule</ng-template>
-
-                    <div class="step-card mt-3">
-                        <div class="row gx-3">
-                            <div class="col-12 col-md-6 mb-3">
-                                <mat-form-field appearance="outline" class="w-100">
-                                    <mat-label>Start Date</mat-label>
-                                    <input matInput type="date" [(ngModel)]="startDate" />
-                                </mat-form-field>
-                            </div>
-                            <div class="col-12 col-md-6 mb-3">
-                                <mat-form-field appearance="outline" class="w-100">
-                                    <mat-label>End Date</mat-label>
-                                    <input matInput type="date" [(ngModel)]="endDate" />
-                                </mat-form-field>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button matButton matStepperPrevious>Back</button>
-                        <button matButton="filled" matStepperNext>Continue</button>
-                    </div>
-                </mat-step>
-
-                <mat-step>
-                    <ng-template matStepLabel>Members</ng-template>
-
-                    <div class="step-card mt-3">
-                        <div class="invite-toolbar mb-3">
-                            <mat-form-field appearance="outline" class="w-100 mb-0">
-                                <mat-label>Search workspace members</mat-label>
-                                <mat-icon matPrefix>search</mat-icon>
-                                <input matInput [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set(($event || '').toString())" placeholder="Type a name or email" />
-                            </mat-form-field>
-                        </div>
-
-                        @if (filteredMembers().length === 0) {
-                        <div class="empty-state">
-                            <mat-icon class="material-icons-outlined">search_off</mat-icon>
-                            <p class="small text-secondary mb-0">No matching workspace members.</p>
-                        </div>
-                        } @else {
-                        <div class="member-list mb-3">
-                            @for (member of filteredMembers(); track member.userId) {
-                            <button type="button" class="member-row d-flex align-items-center" [class.selected]="isSelected(member.userId)" (click)="toggleMember(member.userId)">
-                                <span class="avatar avatar-40 rounded-circle align-middle me-2 bg-light-theme d-flex align-items-center justify-content-center overflow-hidden">
-                                    @if (member.avatarUrl) {
-                                    <img class="w-100 h-100 rounded-circle" [src]="member.avatarUrl" [alt]="member.fullName" />
-                                    } @else {
-                                    <mat-icon class="material-icons-outlined">person</mat-icon>
-                                    }
-                                </span>
-                                <span class="align-middle d-inline-block flex-grow-1 text-start">
-                                    <p class="mb-1">{{ member.fullName }}</p>
-                                    <p class="small mb-0">{{ member.email }}</p>
-                                </span>
-                                <span class="badge badge-light">{{ member.workspaceRole || 'MEMBER' }}</span>
-                            </button>
+            <!-- Step indicator -->
+            <div class="step-track px-4 pb-3">
+                @for (label of stepLabels; track $index) {
+                    <div class="step-node" [class.node-active]="currentStep() === $index" [class.node-done]="currentStep() > $index">
+                        <div class="step-circle">
+                            @if (currentStep() > $index) {
+                                <mat-icon style="font-size:14px;width:14px;height:14px;line-height:14px;">check</mat-icon>
+                            } @else {
+                                {{ $index + 1 }}
                             }
                         </div>
-                        }
-
-                        @if (selectedMembers().length > 0) {
-                        <div class="selected-block">
-                            <p class="small text-secondary mb-2">Selected members and project roles</p>
-                            @for (member of selectedMembers(); track member.userId) {
-                            <div class="row gx-2 align-items-center mb-2">
-                                <div class="col-12 col-md">
-                                    <p class="mb-0">{{ member.fullName }}</p>
-                                </div>
-                                <div class="col-12 col-md-5">
-                                    <mat-form-field appearance="outline" class="w-100 mb-0">
-                                        <mat-label>Role</mat-label>
-                                        <mat-select [ngModel]="memberRole(member.userId)" (ngModelChange)="setMemberRole(member.userId, ($event || '').toString())">
-                                            @for (role of roleOptions(); track role.value) {
-                                            <mat-option [value]="role.value">{{ role.label }}</mat-option>
-                                            }
-                                        </mat-select>
-                                    </mat-form-field>
-                                </div>
-                            </div>
-                            }
-                        </div>
-                        }
+                        <span class="step-label">{{ label }}</span>
                     </div>
-
-                    <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button matButton matStepperPrevious>Back</button>
-                        <button matButton="filled" matStepperNext>Review</button>
-                    </div>
-                </mat-step>
-
-                <mat-step>
-                    <ng-template matStepLabel>Review</ng-template>
-
-                    <div class="step-card mt-3">
-                        <div class="summary-row">
-                            <span>Name</span>
-                            <strong>{{ name.trim() }}</strong>
-                        </div>
-                        <div class="summary-row">
-                            <span>Visibility</span>
-                            <strong>{{ visibility }}</strong>
-                        </div>
-                        <div class="summary-row">
-                            <span>Status</span>
-                            <strong>{{ status }}</strong>
-                        </div>
-                        <div class="summary-row">
-                            <span>Assigned Members</span>
-                            <strong>{{ selectedMembers().length }}</strong>
-                        </div>
-                    </div>
-
-                    <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button matButton matStepperPrevious>Back</button>
-                        <button matButton="filled" [disabled]="!isBasicsValid()" (click)="submit()">
-                            <mat-icon class="material-icons-outlined me-1">add_circle</mat-icon>
-                            Create Project
-                        </button>
-                    </div>
-                </mat-step>
-            </mat-stepper>
+                    @if ($index < stepLabels.length - 1) {
+                        <div class="step-connector" [class.connector-done]="currentStep() > $index"></div>
+                    }
+                }
+            </div>
         </div>
+
+        <!-- Scrollable content -->
+        <mat-dialog-content class="px-4 pt-3 pb-2">
+
+            <!-- Step 0: Basics -->
+            @if (currentStep() === 0) {
+            <form #basicsForm="ngForm">
+                <div class="row gx-3">
+                    <div class="col-12 mb-3">
+                        <mat-form-field appearance="outline" class="w-100">
+                            <mat-label>Project Name</mat-label>
+                            <input
+                                matInput
+                                name="projectName"
+                                [(ngModel)]="name"
+                                required
+                                minlength="3"
+                                [maxlength]="nameMaxLength"
+                                #nameCtrl="ngModel"
+                                placeholder="Ex: AI Automation"
+                            />
+                            <mat-hint align="start">A clear, delivery-focused title.</mat-hint>
+                            <mat-hint align="end">{{ name.length }}/{{ nameMaxLength }}</mat-hint>
+                            @if (nameCtrl.errors?.['required']) {
+                                <mat-error>Project name is required.</mat-error>
+                            }
+                            @if (nameCtrl.errors?.['minlength']) {
+                                <mat-error>Name must be at least 3 characters.</mat-error>
+                            }
+                        </mat-form-field>
+                    </div>
+
+                    <div class="col-12 mb-3">
+                        <mat-form-field appearance="outline" class="w-100">
+                            <mat-label>Description <span class="text-secondary">(optional)</span></mat-label>
+                            <textarea matInput rows="3" name="description" [(ngModel)]="description" maxlength="500" placeholder="What is this project about?"></textarea>
+                            <mat-hint align="end">{{ description.length }}/500</mat-hint>
+                        </mat-form-field>
+                    </div>
+
+                    <div class="col-12 col-sm-6 mb-3">
+                        <mat-form-field appearance="outline" class="w-100">
+                            <mat-label>Visibility</mat-label>
+                            <mat-select name="visibility" [(ngModel)]="visibility">
+                                <mat-option value="PRIVATE">Private</mat-option>
+                                <mat-option value="PUBLIC">Public</mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                    </div>
+
+                    <div class="col-12 col-sm-6 mb-3">
+                        <mat-form-field appearance="outline" class="w-100">
+                            <mat-label>Status</mat-label>
+                            <mat-select name="status" [(ngModel)]="status">
+                                <mat-option value="PLANNING">Planning</mat-option>
+                                <mat-option value="ACTIVE">Active</mat-option>
+                                <mat-option value="ON_HOLD">On Hold</mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                    </div>
+                </div>
+            </form>
+            }
+
+            <!-- Step 1: Schedule -->
+            @if (currentStep() === 1) {
+            <div class="row gx-3">
+                <div class="col-12 col-sm-6 mb-3">
+                    <mat-form-field appearance="outline" class="w-100">
+                        <mat-label>Start Date</mat-label>
+                        <input matInput [matDatepicker]="startPicker" [(ngModel)]="startDateVal" name="startDate" placeholder="Pick a date" />
+                        <mat-datepicker-toggle matIconSuffix [for]="startPicker"></mat-datepicker-toggle>
+                        <mat-datepicker #startPicker></mat-datepicker>
+                        <mat-hint>Optional — when the project begins</mat-hint>
+                    </mat-form-field>
+                </div>
+                <div class="col-12 col-sm-6 mb-3">
+                    <mat-form-field appearance="outline" class="w-100">
+                        <mat-label>End Date</mat-label>
+                        <input matInput [matDatepicker]="endPicker" [(ngModel)]="endDateVal" name="endDate" placeholder="Pick a date" />
+                        <mat-datepicker-toggle matIconSuffix [for]="endPicker"></mat-datepicker-toggle>
+                        <mat-datepicker #endPicker></mat-datepicker>
+                        <mat-hint>Optional — project deadline</mat-hint>
+                    </mat-form-field>
+                </div>
+            </div>
+            @if (!dateRangeValid()) {
+            <div class="d-flex align-items-center gap-2 px-2 py-2 rounded" style="background:rgba(220,53,69,0.08);border:1px solid rgba(220,53,69,0.3);">
+                <mat-icon class="material-icons-outlined" style="font-size:18px;width:18px;height:18px;color:#dc3545;flex-shrink:0">error_outline</mat-icon>
+                <span class="small" style="color:#dc3545">End date must be the same as or after the start date.</span>
+            </div>
+            }
+            }
+
+            <!-- Step 2: Members -->
+            @if (currentStep() === 2) {
+            <div>
+                <div class="invite-toolbar mb-3">
+                    <mat-form-field appearance="outline" class="w-100 mb-0">
+                        <mat-label>Search workspace members</mat-label>
+                        <mat-icon matPrefix>search</mat-icon>
+                        <input matInput [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set(($event || '').toString())" placeholder="Type a name or email" />
+                    </mat-form-field>
+                </div>
+
+                @if (filteredMembers().length === 0) {
+                <div class="empty-state mb-3">
+                    <mat-icon class="material-icons-outlined">search_off</mat-icon>
+                    <p class="small text-secondary mb-0">No matching workspace members.</p>
+                </div>
+                } @else {
+                <div class="member-list mb-3">
+                    @for (member of filteredMembers(); track member.userId) {
+                    <button type="button" class="member-row d-flex align-items-center" [class.selected]="isSelected(member.userId)" (click)="toggleMember(member.userId)">
+                        <span class="avatar avatar-40 rounded-circle align-middle me-2 bg-light-theme d-flex align-items-center justify-content-center overflow-hidden flex-shrink-0">
+                            @if (member.avatarUrl) {
+                            <img class="w-100 h-100 rounded-circle" [src]="member.avatarUrl" [alt]="member.fullName" />
+                            } @else {
+                            <mat-icon class="material-icons-outlined">person</mat-icon>
+                            }
+                        </span>
+                        <span class="align-middle d-inline-block flex-grow-1 text-start overflow-hidden">
+                            <p class="mb-0 text-truncate">{{ member.fullName }}</p>
+                            <p class="small mb-0 text-truncate text-secondary">{{ member.email }}</p>
+                        </span>
+                        <span class="badge badge-light mx-2 flex-shrink-0">{{ member.workspaceRole || 'MEMBER' }}</span>
+                        <mat-icon class="material-icons-outlined flex-shrink-0" [style.color]="isSelected(member.userId) ? '#0088ff' : 'transparent'" style="font-size:18px;width:18px;height:18px;">check_circle</mat-icon>
+                    </button>
+                    }
+                </div>
+                }
+
+                @if (selectedMembers().length > 0) {
+                <div class="selected-block">
+                    <p class="small fw-medium mb-2">
+                        <mat-icon class="material-icons-outlined align-middle me-1" style="font-size:15px;width:15px;height:15px;">group</mat-icon>
+                        {{ selectedMembers().length }} selected — assign roles
+                    </p>
+                    @for (member of selectedMembers(); track member.userId) {
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="flex-grow-1 small text-truncate">{{ member.fullName }}</span>
+                        <mat-form-field appearance="outline" class="mb-0 flex-shrink-0" style="width:180px;">
+                            <mat-label>Role</mat-label>
+                            <mat-select [ngModel]="memberRole(member.userId)" (ngModelChange)="setMemberRole(member.userId, ($event || '').toString())">
+                                @for (role of roleOptions(); track role.value) {
+                                <mat-option [value]="role.value">{{ role.label }}</mat-option>
+                                }
+                            </mat-select>
+                        </mat-form-field>
+                    </div>
+                    }
+                </div>
+                }
+            </div>
+            }
+
+            <!-- Step 3: Review -->
+            @if (currentStep() === 3) {
+            <div class="review-card mb-3">
+                <div class="summary-row"><span>Name</span><strong>{{ name.trim() }}</strong></div>
+                <div class="summary-row"><span>Description</span>
+                    <strong class="text-end" style="max-width:55%;">{{ description.trim() || '—' }}</strong>
+                </div>
+                <div class="summary-row"><span>Visibility</span><strong>{{ visibility }}</strong></div>
+                <div class="summary-row"><span>Status</span><strong>{{ statusLabel(status) }}</strong></div>
+                <div class="summary-row"><span>Start Date</span><strong>{{ formatDate(startDateVal) }}</strong></div>
+                <div class="summary-row"><span>End Date</span><strong>{{ formatDate(endDateVal) }}</strong></div>
+                <div class="summary-row"><span>Assigned Members</span><strong>{{ selectedMembers().length }}</strong></div>
+            </div>
+            @if (selectedMembers().length > 0) {
+            <div class="review-members">
+                <p class="small fw-medium mb-2">Member roles</p>
+                @for (member of selectedMembers(); track member.userId) {
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="flex-grow-1 small text-truncate">{{ member.fullName }}</span>
+                    <span class="badge badge-light">{{ memberRole(member.userId) }}</span>
+                </div>
+                }
+            </div>
+            }
+            }
+
+        </mat-dialog-content>
+
+        <!-- Fixed footer — always visible -->
+        <mat-dialog-actions align="end" class="px-4 pb-3 pt-2">
+            @if (currentStep() === 0) {
+                <button matButton (click)="close()">Cancel</button>
+            }
+            @if (currentStep() > 0) {
+                <button matButton (click)="prevStep()">
+                    <mat-icon class="material-icons-outlined">arrow_back</mat-icon> Back
+                </button>
+            }
+            @if (currentStep() < 3) {
+                <button matButton="filled" (click)="nextStep()" [disabled]="!dateRangeValid()">
+                    Continue <mat-icon class="material-icons-outlined">arrow_forward</mat-icon>
+                </button>
+            }
+            @if (currentStep() === 3) {
+                <button matButton="filled" (click)="submit()">
+                    <mat-icon class="material-icons-outlined me-1">add_circle</mat-icon>
+                    Create Project
+                </button>
+            }
+        </mat-dialog-actions>
     `,
     styles: [
         `
-            .create-shell {
-                background: radial-gradient(circle at top right, rgba(0, 136, 255, 0.08), transparent 55%);
+            :host {
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                overflow: hidden;
             }
 
-            .workspace-stepper {
-                background: transparent;
+            .dialog-header {
+                flex-shrink: 0;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+                background: radial-gradient(circle at top right, rgba(0, 136, 255, 0.07), transparent 60%);
             }
 
-            .step-card {
-                border: 1px solid rgba(0, 0, 0, 0.08);
-                border-radius: 14px;
-                padding: 14px;
+            /* ── Step indicator ── */
+            .step-track {
+                display: flex;
+                align-items: center;
+            }
+
+            .step-node {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .step-circle {
+                width: 26px;
+                height: 26px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: 600;
+                border: 2px solid rgba(0, 0, 0, 0.18);
+                color: rgba(0, 0, 0, 0.4);
                 background: #fff;
+                flex-shrink: 0;
+                transition: all 0.2s ease;
             }
 
+            .step-label {
+                font-size: 12px;
+                color: rgba(0, 0, 0, 0.45);
+                white-space: nowrap;
+            }
+
+            .step-node.node-active .step-circle {
+                border-color: #0088ff;
+                color: #0088ff;
+                background: rgba(0, 136, 255, 0.08);
+            }
+
+            .step-node.node-active .step-label {
+                color: #0088ff;
+                font-weight: 600;
+            }
+
+            .step-node.node-done .step-circle {
+                border-color: #16a34a;
+                color: #fff;
+                background: #16a34a;
+            }
+
+            .step-node.node-done .step-label {
+                color: #16a34a;
+            }
+
+            .step-connector {
+                flex: 1;
+                height: 2px;
+                background: rgba(0, 0, 0, 0.12);
+                margin: 0 8px;
+                min-width: 20px;
+                transition: background 0.2s ease;
+            }
+
+            .step-connector.connector-done {
+                background: #16a34a;
+            }
+
+            /* ── Member list ── */
             .invite-toolbar {
                 border: 1px solid rgba(0, 0, 0, 0.08);
                 border-radius: 12px;
@@ -255,34 +376,49 @@ export interface CreateProjectWorkflowDialogResult {
             .member-list {
                 display: flex;
                 flex-direction: column;
-                gap: 8px;
-                max-height: 240px;
-                overflow: auto;
+                gap: 6px;
+                max-height: 260px;
+                overflow-y: auto;
+                padding-right: 2px;
             }
 
             .member-row {
                 width: 100%;
                 border: 1px solid rgba(0, 0, 0, 0.08);
-                border-radius: 12px;
-                padding: 10px;
+                border-radius: 10px;
+                padding: 8px 10px;
                 background: #fff;
-                transition: all 0.2s ease;
+                transition: all 0.15s ease;
+                cursor: pointer;
             }
 
             .member-row:hover {
-                border-color: rgba(0, 136, 255, 0.45);
-                transform: translateY(-1px);
+                border-color: rgba(0, 136, 255, 0.4);
+                background: rgba(0, 136, 255, 0.02);
             }
 
             .member-row.selected {
                 border-color: #0088ff;
-                box-shadow: 0 0 0 2px rgba(0, 136, 255, 0.12);
+                box-shadow: 0 0 0 2px rgba(0, 136, 255, 0.1);
                 background: rgba(0, 136, 255, 0.04);
             }
 
             .selected-block {
                 border-top: 1px dashed rgba(0, 0, 0, 0.12);
-                padding-top: 10px;
+                padding-top: 12px;
+            }
+
+            /* ── Review ── */
+            .review-card {
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                border-radius: 12px;
+                overflow: hidden;
+            }
+
+            .review-members {
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                border-radius: 12px;
+                padding: 12px 14px;
             }
 
             .summary-row {
@@ -290,14 +426,26 @@ export interface CreateProjectWorkflowDialogResult {
                 justify-content: space-between;
                 align-items: center;
                 gap: 10px;
-                padding: 10px 0;
-                border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
+                padding: 10px 14px;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.06);
             }
 
             .summary-row:last-child {
                 border-bottom: 0;
             }
 
+            .summary-row span {
+                color: rgba(0, 0, 0, 0.5);
+                font-size: 13px;
+                flex-shrink: 0;
+            }
+
+            .summary-row strong {
+                font-size: 13px;
+                text-align: right;
+            }
+
+            /* ── Empty state ── */
             .empty-state {
                 display: flex;
                 gap: 8px;
@@ -314,30 +462,43 @@ export class CreateProjectWorkflowDialogComponent {
     readonly dialogRef = inject(MatDialogRef<CreateProjectWorkflowDialogComponent>);
     readonly data = inject(MAT_DIALOG_DATA) as CreateProjectWorkflowDialogData;
 
+    @ViewChild("basicsForm") basicsForm?: NgForm;
+
+    // Step state
+    readonly currentStep = signal(0);
+    readonly stepLabels = ["Basics", "Schedule", "Members", "Review"];
+
+    // Form fields
     name = "";
     description = "";
     visibility: "PRIVATE" | "PUBLIC" = "PRIVATE";
     status: "PLANNING" | "ACTIVE" | "ON_HOLD" = "PLANNING";
-    startDate = "";
-    endDate = "";
+    startDateVal: Date | null = new Date();
+    endDateVal: Date | null = null;
 
+    readonly nameMaxLength = 150;
+
+    // Member selection
     readonly searchTerm = signal("");
     readonly selectedUserIds = signal<number[]>([]);
     readonly rolesByUserId = signal<Record<number, string>>({});
 
     readonly filteredMembers = computed(() => {
         const query = this.searchTerm().trim().toLowerCase();
-        if (!query) {
-            return this.data.members || [];
-        }
-        return (this.data.members || []).filter((member) =>
-            member.fullName.toLowerCase().includes(query) || member.email.toLowerCase().includes(query)
+        if (!query) return this.data.members || [];
+        return (this.data.members || []).filter(
+            (m) => m.fullName.toLowerCase().includes(query) || m.email.toLowerCase().includes(query)
         );
     });
 
     readonly selectedMembers = computed(() => {
         const ids = new Set(this.selectedUserIds());
-        return (this.data.members || []).filter((member) => ids.has(member.userId));
+        return (this.data.members || []).filter((m) => ids.has(m.userId));
+    });
+
+    readonly dateRangeValid = computed(() => {
+        if (!this.startDateVal || !this.endDateVal) return true;
+        return this.startDateVal.getTime() <= this.endDateVal.getTime();
     });
 
     readonly roleOptions = computed(() => {
@@ -359,7 +520,20 @@ export class CreateProjectWorkflowDialogComponent {
     });
 
     isBasicsValid(): boolean {
-        return this.name.trim().length >= 3;
+        return this.name.trim().length >= 3 && this.name.trim().length <= this.nameMaxLength;
+    }
+
+    nextStep(): void {
+        if (this.currentStep() === 0) {
+            this.basicsForm?.form.markAllAsTouched();
+            if (this.basicsForm?.invalid) return;
+        }
+        if (this.currentStep() === 1 && !this.dateRangeValid()) return;
+        this.currentStep.update((n) => n + 1);
+    }
+
+    prevStep(): void {
+        this.currentStep.update((n) => n - 1);
     }
 
     isSelected(userId: number): boolean {
@@ -373,7 +547,6 @@ export class CreateProjectWorkflowDialogComponent {
             return;
         }
         this.selectedUserIds.set([...selected, userId]);
-
         const currentRoles = { ...this.rolesByUserId() };
         if (!currentRoles[userId]) {
             currentRoles[userId] = this.defaultRoleForMember(userId);
@@ -389,10 +562,18 @@ export class CreateProjectWorkflowDialogComponent {
         this.rolesByUserId.set({ ...this.rolesByUserId(), [userId]: role });
     }
 
+    formatDate(d: Date | null): string {
+        if (!d) return "—";
+        return d.toLocaleDateString();
+    }
+
+    statusLabel(status: string): string {
+        const map: Record<string, string> = { PLANNING: "Planning", ACTIVE: "Active", ON_HOLD: "On Hold" };
+        return map[status] || status;
+    }
+
     submit(): void {
-        if (!this.isBasicsValid()) {
-            return;
-        }
+        if (!this.isBasicsValid()) return;
 
         const payload: Record<string, unknown> = {
             name: this.name.trim(),
@@ -401,16 +582,12 @@ export class CreateProjectWorkflowDialogComponent {
             status: this.status,
         };
 
-        if (this.startDate) {
-            payload["startDate"] = this.startDate;
-        }
-        if (this.endDate) {
-            payload["endDate"] = this.endDate;
-        }
+        if (this.startDateVal) payload["startDate"] = this.toDateStr(this.startDateVal);
+        if (this.endDateVal) payload["endDate"] = this.toDateStr(this.endDateVal);
 
-        const assignments = this.selectedMembers().map((member) => ({
-            userId: member.userId,
-            role: this.memberRole(member.userId),
+        const assignments = this.selectedMembers().map((m) => ({
+            userId: m.userId,
+            role: this.memberRole(m.userId),
         }));
 
         this.dialogRef.close({ payload, assignments } as CreateProjectWorkflowDialogResult);
@@ -420,21 +597,18 @@ export class CreateProjectWorkflowDialogComponent {
         this.dialogRef.close();
     }
 
+    private toDateStr(d: Date): string {
+        const y = d.getFullYear();
+        const mo = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${mo}-${day}`;
+    }
+
     private defaultRoleForMember(userId: number): string {
         const member = (this.data.members || []).find((row) => row.userId === userId);
         const workspaceRole = (member?.workspaceRole || "").toUpperCase();
         const academic = (this.data.orgType || "").toLowerCase() === "academic";
-
-        if (academic) {
-            if (workspaceRole === "TA") {
-                return "PROFESSOR";
-            }
-            return "DEVELOPER";
-        }
-
-        if (workspaceRole === "OWNER" || workspaceRole === "ADMIN" || workspaceRole === "MANAGER") {
-            return "PROJECT_MANAGER";
-        }
-        return "DEVELOPER";
+        if (academic) return workspaceRole === "TA" ? "PROFESSOR" : "DEVELOPER";
+        return workspaceRole === "OWNER" || workspaceRole === "ADMIN" || workspaceRole === "MANAGER" ? "PROJECT_MANAGER" : "DEVELOPER";
     }
 }

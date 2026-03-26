@@ -59,11 +59,15 @@ interface M2CreateWorkspaceDialogData {
                             <div class="col-12 mb-3">
                                 <mat-form-field appearance="outline" class="w-100">
                                     <mat-label>{{ entityLabel() }} Name</mat-label>
-                                    <input matInput [ngModel]="name" (ngModelChange)="onNameChange(($event || '').toString())" placeholder="Ex: Data Engineering" />
-                                    <mat-hint>Use a clear {{ entityLabel().toLowerCase() }} name.</mat-hint>
+                                    <input matInput [ngModel]="name" (ngModelChange)="onNameChange(($event || '').toString())" placeholder="Ex: Data Engineering" maxlength="100" (blur)="nameTouched = true" />
+                                    <mat-hint align="start">Use a clear {{ entityLabel().toLowerCase() }} name.</mat-hint>
+                                    <mat-hint align="end">{{ name.length }}/100</mat-hint>
                                 </mat-form-field>
+                                @if (nameTouched && name.trim().length === 0) {
+                                <p class="small theme-red mb-0 mt-1"><mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle" class="material-icons-outlined">error_outline</mat-icon> {{ entityLabel() }} name is required.</p>
+                                }
                                 @if (name.trim().length > 0 && name.trim().length < 3) {
-                                <p class="small theme-red mb-0">{{ entityLabel() }} name should be at least 3 characters.</p>
+                                <p class="small theme-red mb-0 mt-1"><mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle" class="material-icons-outlined">error_outline</mat-icon> {{ entityLabel() }} name must be at least 3 characters.</p>
                                 }
                             </div>
 
@@ -223,6 +227,7 @@ export class M2CreateWorkspaceDialogComponent {
     name = "";
     slug = "";
     organizationId = this.data?.defaultOrganizationId || "";
+    nameTouched = false;
     private slugManuallyEdited = false;
 
     entityLabel(): "Workspace" | "Group" {

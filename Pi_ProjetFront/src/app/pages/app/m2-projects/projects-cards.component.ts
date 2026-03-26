@@ -16,7 +16,14 @@ import { FormsModule } from "@angular/forms";
 import { MatProgressBar, MatProgressBarModule } from "@angular/material/progress-bar";
 import { MatTooltipModule } from "@angular/material/tooltip";
 import { MatDialog } from "@angular/material/dialog";
+import { MatSnackBar } from "@angular/material/snack-bar";
+import { MatSnackBarModule } from "@angular/material/snack-bar";
 import { CreateEditProjectModal } from "./createeditproject.component";
+import { ProjectAddMemberModalComponent } from "./project-add-member-modal.component";
+import { ProjectDeleteConfirmDialogComponent } from "./project-delete-confirm-dialog.component";
+import { M2ProjectService } from "./m2-project.service";
+import { ProjectPermissionService } from "./project-permission.service";
+import { WorkspacePermissionService } from "../m2-workspaces/workspace-permission.service";
 import { Router } from "@angular/router";
 
 export interface TableItem {
@@ -32,6 +39,9 @@ export interface TableItem {
     progress: number; // Percentage
     workspaceId?: string;
     projectUuid?: string;
+    // optional lightweight members forwarded by real projects view
+    teamMembers?: Array<{ userId: number; fullName: string; avatarUrl?: string }>;
+    teamSize?: number;
 }
 
 type SortColumn = keyof TableItem | "";
@@ -40,7 +50,7 @@ type SortDirection = "asc" | "desc" | "";
 @Component({
     selector: "app-projects-cards",
     standalone: true,
-    imports: [CommonModule, MatCardModule, MatIconModule, MatMenuModule, MatProgressBarModule, MatTooltipModule, MatTableModule, MatPaginatorModule, MatSortModule, MatButtonModule, MatFormFieldModule, FormsModule, MatListModule, MatInputModule, MatSelectModule, MatChipsModule],
+    imports: [CommonModule, MatCardModule, MatIconModule, MatMenuModule, MatProgressBarModule, MatTooltipModule, MatTableModule, MatPaginatorModule, MatSortModule, MatButtonModule, MatFormFieldModule, FormsModule, MatListModule, MatInputModule, MatSelectModule, MatChipsModule, ProjectAddMemberModalComponent, MatSnackBarModule],
     template: ` <div class="row gx-3 align-items-center">
             <div class="col-auto mb-3">
                 <div class="avatar avatar-40 text-theme rounded">
@@ -117,7 +127,7 @@ type SortDirection = "asc" | "desc" | "";
             <!-- Project Cards -->
             @for (project of filteredTableItems(); track project.id) {
             <div class="col-12 col-sm-6 col-lg-4">
-                <mat-card class="overflow-hidden mb-3 mb-lg-4">
+                <mat-card class="overflow-hidden mb-3 mb-lg-4" (click)="openProject(project)">
                     <!-- Top Image Area -->
                     <div mat-card-image class="w-100 height-200 coverimg mb-3" (click)="openProject(project)">
                         <img [src]="project.image" alt="Project Image" class="w-100" loading="lazy" />
@@ -151,21 +161,25 @@ type SortDirection = "asc" | "desc" | "";
                                 <h3 class="mb-1 text-truncated">{{ project.name }} <mat-icon class="material-icons-outlined hoverview-icon d-inline-block align-middle text-theme">arrow_forward</mat-icon></h3>
                                 <p class="text-secondary text-truncated">{{ project.company }}</p>
                             </div>
+                            @if (projectPermissions.canManageProject() && workspacePermissions.userRole() !== 'EMPLOYEE' && workspacePermissions.userRole() !== 'STUDENT') {
                             <div class="col-auto mb-3">
                                 <button matIconButton [matMenuTriggerFor]="actionsMenu" aria-label="Actions" (click)="$event.stopPropagation()">
                                     <mat-icon class="material-icons-outlined">more_vert</mat-icon>
                                 </button>
                                 <mat-menu #actionsMenu="matMenu">
-                                    <button mat-menu-item (click)="openDialog(project)">
-                                        <mat-icon class="material-icons-outlined">edit</mat-icon>
-                                        <span>Edit</span>
+                                    <button mat-menu-item (click)="$event.stopPropagation(); openDialog(project)">
+                                        <mat-icon class="material-icons-outlined">open_in_new</mat-icon>
+                                        <span>View Details</span>
                                     </button>
-                                    <button mat-menu-item (click)="deleteProject(project)">
-                                        <mat-icon class="material-icons-outlined">delete</mat-icon>
-                                        <span>Delete</span>
+                                    <button mat-menu-item (click)="$event.stopPropagation(); archiveProject(project)">
+                                        <mat-icon class="material-icons-outlined">archive</mat-icon>
+                                        <span>Archive</span>
                                     </button>
                                 </mat-menu>
                             </div>
+                            } @else {
+                            <div class="col-auto mb-3"></div>
+                            }
                         </div>
                         <mat-divider class="mb-3"></mat-divider>
 
@@ -192,22 +206,31 @@ type SortDirection = "asc" | "desc" | "";
 
                         <div class="row gx-3 align-items-center">
                             <div class="col-auto avatar-group mb-3">
-                                <div class="avatar avatar-30 rounded-circle coverimg" matTooltip="John Dmitri">
-                                    <img src="assets/img/user-1.jpg" alt="" />
+                                @for (member of (project.teamMembers || []).slice(0, 3); track member.userId) {
+                                <div class="avatar avatar-30 rounded-circle coverimg d-flex align-items-center justify-content-center bg-light-theme overflow-hidden" matTooltip="{{ member.fullName }}">
+                                    @if (member.avatarUrl) {
+                                    <img class="w-100 h-100" [src]="member.avatarUrl" [alt]="member.fullName" (error)="$any($event.target).style.display='none'" />
+                                    } @else {
+                                    <mat-icon class="material-icons-outlined" style="font-size:18px;width:18px;height:18px;">person</mat-icon>
+                                    }
                                 </div>
-                                <div class="avatar avatar-30 rounded-circle coverimg" matTooltip="Ayub Shan">
-                                    <img src="assets/img/user-3.jpg" alt="" />
+                                }
+                                @if ((project.teamMembers || []).length > 3) {
+                                <div class="avatar avatar-30 rounded-circle bg-light-theme text-theme d-flex align-items-center justify-content-center" style="font-size:10px;font-weight:600;" matTooltip="{{ (project.teamMembers || []).length - 3 }} more members">
+                                    +{{ (project.teamMembers || []).length - 3 }}
                                 </div>
-                                <div class="avatar avatar-30 rounded-circle coverimg" matTooltip="Liana Doe">
-                                    <img src="assets/img/user-4.jpg" alt="" />
-                                </div>
+                                }
                             </div>
                             <div class="col mb-3">
-                                <p class="mb-0">+ 16</p>
+                                <p class="mb-0">{{ project.teamSize || (project.teamMembers ? project.teamMembers.length : 0) }}</p>
                                 <p class="text-secondary small">Team Members</p>
                             </div>
                             <div class="col-auto mb-3">
-                                <button matIconButton><mat-icon class="material-icons-outlined">person_add</mat-icon></button>
+                                @if (useRealRouting && projectPermissions.canManageProject() && workspacePermissions.userRole() !== 'EMPLOYEE' && workspacePermissions.userRole() !== 'STUDENT') {
+                                <button matIconButton (click)="$event.stopPropagation(); openAddMemberModal(project)"><mat-icon class="material-icons-outlined">person_add</mat-icon></button>
+                                } @else {
+                                <span></span>
+                                }
                             </div>
                         </div>
 
@@ -291,6 +314,10 @@ type SortDirection = "asc" | "desc" | "";
 export class ProjectsCardsComponent implements OnInit {
     // dialog
     readonly dialog = inject(MatDialog);
+    private readonly snackBar = inject(MatSnackBar);
+    private readonly projectService = inject(M2ProjectService);
+    readonly projectPermissions = inject(ProjectPermissionService);
+    readonly workspacePermissions = inject(WorkspacePermissionService);
     private readonly router = inject(Router);
 
     @Input() projectsData: TableItem[] | null = null;
@@ -455,12 +482,33 @@ export class ProjectsCardsComponent implements OnInit {
         console.log(`User Action: ${action}`);
     }
 
-    deleteProject(project: TableItem) {
-        // console.log("Deleting order:", order);
-        // Logic for deleting an order goes here
+    archiveProject(project: TableItem) {
+        if (!this.useRealRouting || !project.workspaceId || !project.projectUuid) return;
+
+        const ref = this.dialog.open(ProjectDeleteConfirmDialogComponent, {
+            width: "480px",
+            maxWidth: "95vw",
+            data: { projectName: project.name, permanent: false },
+        });
+
+        ref.afterClosed().subscribe((result?: { confirmed: true }) => {
+            if (!result?.confirmed) return;
+            this.projectService.archiveProject(project.workspaceId!, project.projectUuid!).subscribe({
+                next: () => {
+                    this.snackBar.open("Project archived and removed from view.", "Close", { duration: 3500 });
+                    const current = this.externalData();
+                    if (current) this.externalData.set(current.filter((p) => p.projectUuid !== project.projectUuid));
+                },
+                error: () => this.snackBar.open("Failed to archive project.", "Close", { duration: 4200 }),
+            });
+        });
     }
 
     openDialog(project: TableItem) {
+        if (this.useRealRouting && project.workspaceId && project.projectUuid) {
+            this.router.navigate(["/app/real-projects", project.workspaceId, project.projectUuid]);
+            return;
+        }
         this.selectedItem = { ...project };
         this.dialog.open(CreateEditProjectModal, {
             width: "990px",
@@ -468,6 +516,33 @@ export class ProjectsCardsComponent implements OnInit {
             panelClass: "custom-dialog-container",
             autoFocus: false,
             data: this.selectedItem,
+        });
+    }
+
+    openAddMemberModal(project: TableItem) {
+        if (!this.useRealRouting || !project.workspaceId || !project.projectUuid) return;
+
+        this.projectService.getAvailableWorkspaceMembers(project.workspaceId, project.projectUuid).subscribe({
+            next: (members) => {
+                if (!members || members.length === 0) {
+                    this.snackBar.open("No workspace members are available to add.", "Close", { duration: 3200 });
+                    return;
+                }
+
+                const ref = this.dialog.open(ProjectAddMemberModalComponent, {
+                    width: "560px",
+                    maxWidth: "95vw",
+                    data: {
+                        workspaceId: project.workspaceId,
+                        projectId: project.projectUuid,
+                        orgType: "enterprise",
+                        members,
+                    },
+                });
+
+                ref.afterClosed().subscribe();
+            },
+            error: () => this.snackBar.open("Failed to load available members.", "Close", { duration: 3200 }),
         });
     }
 

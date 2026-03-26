@@ -39,13 +39,10 @@ public class WorkspaceController {
     @ResponseStatus(HttpStatus.CREATED)
     public Workspace createWorkspace(@RequestBody Map<String, String> body, HttpServletRequest request) {
         User currentUser = requireCurrentUser(request);
+        String name = parseRequiredWorkspaceName(body.get("name"));
+        String slug = parseOptionalSlug(body.get("slug"));
         UUID organizationId = parseOptionalUuid(body.getOrDefault("organizationId", body.get("orgId")));
-        return workspaceService.createWorkspaceForCurrentUser(
-            currentUser,
-            body.get("name"),
-            body.get("slug"),
-            organizationId
-        );
+        return workspaceService.createWorkspaceForCurrentUser(currentUser, name, slug, organizationId);
     }
 
     @PutMapping("/{id}")
@@ -53,7 +50,9 @@ public class WorkspaceController {
                             @RequestBody Map<String, String> body,
                             HttpServletRequest request) {
         User currentUser = requireCurrentUser(request);
-        return workspaceService.update(id, body.get("name"), body.get("slug"), currentUser);
+        String name = parseRequiredWorkspaceName(body.get("name"));
+        String slug = parseOptionalSlug(body.get("slug"));
+        return workspaceService.update(id, name, slug, currentUser);
     }
 
     @DeleteMapping("/{id}")
@@ -151,6 +150,25 @@ public class WorkspaceController {
             throw new Module2Exception(Module2Exception.ErrorCode.FORBIDDEN, "Missing authenticated user context");
         }
         return currentUser;
+    }
+
+    private String parseRequiredWorkspaceName(String value) {
+        if (value == null || value.isBlank())
+            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Workspace name is required.");
+        String name = value.trim();
+        if (name.length() < 3)   throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Workspace name must be at least 3 characters.");
+        if (name.length() > 100) throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Workspace name cannot exceed 100 characters.");
+        return name;
+    }
+
+    private String parseOptionalSlug(String value) {
+        if (value == null || value.isBlank()) return null;
+        String slug = value.trim().toLowerCase();
+        if (!slug.matches("^[a-z0-9]+(?:-[a-z0-9]+)*$"))
+            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Slug must contain only lowercase letters, numbers, and single hyphens.");
+        if (slug.length() > 80)
+            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Slug cannot exceed 80 characters.");
+        return slug;
     }
 
     private UUID parseOptionalUuid(String value) {

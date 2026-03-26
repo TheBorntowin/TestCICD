@@ -98,11 +98,11 @@ interface Activity {
                     <div class="col-12 col-md mb-3 mb-xl-0 py-1 order-1 order-lg-1">
                         <h3 class="mb-1">Projects: {{ project().name }}</h3>
                         <p class="small">
-                            <span routerLink="/app/dashboard" class="me-2 text-theme style-none"> <mat-icon class="material-icons-outlined align-middle text-sm">house</mat-icon> Home</span>
+                            <span routerLink="/app/dashboard" class="me-2 text-theme style-none breadcrumb-link"> <mat-icon class="material-icons-outlined align-middle text-sm">house</mat-icon> Home</span>
                             <mat-icon class="material-icons-outlined align-middle text-sm me-2">chevron_right</mat-icon>
-                            <span [routerLink]="['/app/real-projects']" [queryParams]="workspaceId() ? { workspaceId: workspaceId() } : null" class="me-2 text-theme style-none">Real Projects</span>
+                            <span [routerLink]="['/app/real-projects']" [queryParams]="workspaceId() ? { workspaceId: workspaceId() } : null" class="me-2 text-theme style-none breadcrumb-link">Real Projects</span>
                             <mat-icon class="material-icons-outlined align-middle text-sm me-2">chevron_right</mat-icon>
-                            Project Details
+                            <span class="me-2">Project Details</span>
                         </p>
                     </div>
 
@@ -144,24 +144,12 @@ interface Activity {
                 <div class="col-6 col-md-3 col-xl">
                     <mat-card class="mb-3 mb-lg-4">
                         <mat-card-content class="pb-0">
-                            <h1 class="mb-1">$ 600.00</h1>
-                            <p class="small text-secondary">Budget Remaining</p>
+                            <h1 class="mb-1">{{ startDateLabel() }}</h1>
+                            <p class="small text-secondary">Start Date</p>
                             <br />
-                            <div class="row gx-3 align-items-center mb-2">
-                                <div class="col-6">
-                                    <p class="text-secondary">Total Budget:</p>
-                                </div>
-                                <div class="col">
-                                    <h3>$ 1200.00</h3>
-                                </div>
-                            </div>
                             <div class="row gx-3 align-items-center mb-3">
-                                <div class="col-6">
-                                    <p class="text-secondary">Progress:</p>
-                                </div>
-                                <div class="col">
-                                    <h3>{{ project().progress }} %</h3>
-                                </div>
+                                <div class="col-6"><p class="text-secondary">Running:</p></div>
+                                <div class="col"><h3>{{ projectDurationLabel() }}</h3></div>
                             </div>
                         </mat-card-content>
                     </mat-card>
@@ -169,24 +157,12 @@ interface Activity {
                 <div class="col-6 col-md-3 col-xl">
                     <mat-card class="mb-3 mb-lg-4">
                         <mat-card-content class="pb-0">
-                            <h1 class="mb-1">120.00</h1>
-                            <p class="small text-secondary">Total Hours</p>
+                            <h1 class="mb-1">{{ project().status }}</h1>
+                            <p class="small text-secondary">Project Status</p>
                             <br />
-                            <div class="row gx-3 align-items-center mb-2">
-                                <div class="col-6">
-                                    <p class="text-secondary">Billing:</p>
-                                </div>
-                                <div class="col">
-                                    <h3>60.50</h3>
-                                </div>
-                            </div>
                             <div class="row gx-3 align-items-center mb-3">
-                                <div class="col-6">
-                                    <p class="text-secondary">Learning:</p>
-                                </div>
-                                <div class="col">
-                                    <h3>60.50</h3>
-                                </div>
+                                <div class="col-6"><p class="text-secondary">Priority:</p></div>
+                                <div class="col"><h3>{{ project().priority }}</h3></div>
                             </div>
                         </mat-card-content>
                     </mat-card>
@@ -194,24 +170,12 @@ interface Activity {
                 <div class="col-6 col-md-3 col-xl">
                     <mat-card class="mb-3 mb-lg-4">
                         <mat-card-content class="pb-0">
-                            <h1 class="mb-1">$ 50.00</h1>
-                            <p class="small text-secondary">Infrastructure Cost</p>
+                            <h1 class="mb-1">{{ project().dueDate }}</h1>
+                            <p class="small text-secondary">Due Date</p>
                             <br />
-                            <div class="row gx-3 align-items-center mb-2">
-                                <div class="col-6">
-                                    <p class="text-secondary">Expenses:</p>
-                                </div>
-                                <div class="col-auto">
-                                    <h3>34.50</h3>
-                                </div>
-                            </div>
                             <div class="row gx-3 align-items-center mb-3">
-                                <div class="col-6">
-                                    <p class="text-secondary">Utilities:</p>
-                                </div>
-                                <div class="col">
-                                    <h3>15.50</h3>
-                                </div>
+                                <div class="col-6"><p class="text-secondary">Timeline:</p></div>
+                                <div class="col"><h3>{{ daysRemainingLabel() }}</h3></div>
                             </div>
                         </mat-card-content>
                     </mat-card>
@@ -219,24 +183,12 @@ interface Activity {
                 <div class="col-6 col-md-3 col-xl">
                     <mat-card class="mb-3 mb-lg-4">
                         <mat-card-content class="pb-0">
-                            <h1 class="mb-1">$ 150.00</h1>
-                            <p class="small text-secondary">Pending Invoice</p>
+                            <h1 class="mb-1">{{ parentProjectCreatedAt() }}</h1>
+                            <p class="small text-secondary">Created</p>
                             <br />
-                            <div class="row gx-3 align-items-center mb-2">
-                                <div class="col-6">
-                                    <p class="text-secondary">Next Billing:</p>
-                                </div>
-                                <div class="col">
-                                    <h3>6 June 2025</h3>
-                                </div>
-                            </div>
                             <div class="row gx-3 align-items-center mb-3">
-                                <div class="col-6">
-                                    <p class="text-secondary">Method:</p>
-                                </div>
-                                <div class="col">
-                                    <h3>Paypal</h3>
-                                </div>
+                                <div class="col-6"><p class="text-secondary">Team:</p></div>
+                                <div class="col"><h3>{{ project().teamSize }}</h3></div>
                             </div>
                         </mat-card-content>
                     </mat-card>
@@ -418,7 +370,7 @@ interface Activity {
                                         <!-- New Comment Input Area -->
                                         <mat-form-field appearance="outline" class="w-100 my-3 mt-lg-4">
                                             <mat-label>Add a comment...</mat-label>
-                                            <input matInput rows="3" [(ngModel)]="newCommentText" (keyup.enter)="addComment()" />
+                                            <input matInput rows="3" [ngModel]="newCommentText()" (ngModelChange)="newCommentText.set($event)" (keyup.enter)="addComment()" />
                                             <button matIconButton matSuffix class="text-theme me-2" (click)="addComment()" [disabled]="!newCommentText() || newCommentText().trim().length === 0" aria-label="Send comment">
                                                 <mat-icon>send</mat-icon>
                                             </button>
@@ -674,7 +626,11 @@ interface Activity {
             }
         </div>
     `,
-    styles: [``],
+    styles: [`
+        .breadcrumb-link {
+            cursor: pointer;
+        }
+    `],
     schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 export class ProjectDetailsComponent implements OnInit {
@@ -917,6 +873,51 @@ export class ProjectDetailsComponent implements OnInit {
             timestamp: new Date(Date.now() - 1200000), // 20 minutes ago
         },
     ]);
+
+    // Computed signals for project details
+    readonly startDateLabel = computed(() => {
+        const startDate = this.project().dueDate;
+        return startDate ? new Date(startDate).toLocaleDateString() : "-";
+    });
+
+    readonly parentProjectCreatedAt = computed(() => {
+        // Mock: Since project API doesn't return createdAt in TableItem, use a fixed value or derive from context
+        return new Date().toLocaleDateString();
+    });
+
+    readonly daysRunning = computed(() => {
+        const startDate = this.project().dueDate;
+        if (!startDate) return 0;
+        const start = new Date(startDate).getTime();
+        const now = Date.now();
+        if (now < start) return 0;
+        return Math.floor((now - start) / (1000 * 60 * 60 * 24));
+    });
+
+    readonly daysRemaining = computed(() => {
+        const endDate = this.project().dueDate;
+        if (!endDate) return null;
+        const end = new Date(endDate).getTime();
+        const now = Date.now();
+        const days = Math.floor((end - now) / (1000 * 60 * 60 * 24));
+        return days;
+    });
+
+    readonly projectDurationLabel = computed(() => {
+        const days = this.daysRunning();
+        if (days === 0) return "Starting soon";
+        if (days === 1) return "1 day";
+        return `${days} days`;
+    });
+
+    readonly daysRemainingLabel = computed(() => {
+        const days = this.daysRemaining();
+        if (days === null) return "No end date";
+        if (days < 0) return "Completed";
+        if (days === 0) return "Ends today";
+        if (days === 1) return "1 day left";
+        return `${days} days left`;
+    });
 
     // Signal for the text currently in the comment input
     newCommentText = signal("");

@@ -86,7 +86,7 @@ export const routes: Routes = [
             },
             {
                 path: "real-projects/:workspaceId/:projectId",
-                loadComponent: () => import("./pages/app/m2-projects/project-details.component").then((c) => c.ProjectDetailsComponent),
+                loadComponent: () => import("./pages/app/m2-projects/real-project-details.component").then((c) => c.ProjectDetailsComponent),
             },
             {
                 path: "m2-projects",

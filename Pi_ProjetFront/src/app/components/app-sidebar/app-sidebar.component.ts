@@ -169,13 +169,15 @@ export class AppSidebarComponent {
             all.push({ name: "Employees", route: "/app/employee", icon: "person" });
         }
 
-        // All authenticated roles can access Workspaces list (backend still enforces membership visibility).
-        const projectChildren: NavItem[] = [{ name: "Workspaces", route: "/app/workspaces", icon: "workspaces" }];
+        // All authenticated roles can access Workspaces list and their projects.
+        const projectChildren: NavItem[] = [
+            { name: "Workspaces", route: "/app/workspaces", icon: "workspaces" },
+            { name: "My Projects", route: "/app/real-projects", icon: "folder_special" },
+        ];
 
         // Manager/Admin/Tutor roles can access broader project/task workspace management views.
         if (this.canManageWorkspaces) {
             projectChildren.push(
-                { name: "Real Projects", route: "/app/real-projects", icon: "dataset" },
                 { name: "Projects (Template)", route: "/app/projects", icon: "assignment" },
                 { name: "Project Details (Template)", route: "/app/project-details", icon: "subject" },
                 { name: "All Task", route: "/app/all-tasks", icon: "checklist" },

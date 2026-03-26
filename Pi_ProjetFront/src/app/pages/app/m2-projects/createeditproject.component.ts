@@ -94,8 +94,8 @@ import { EmployeeSelect2Component } from "../../../components/employee-select/em
                             <div class="col-12 col-md-6">
                                 <mat-form-field appearance="outline" class="w-100">
                                     <mat-label>Due date</mat-label>
-                                    <input matInput [matDatepicker]="picker" />
-                                    <mat-datepicker-toggle matIconSuffix [(ngModel)]="projectData.dueDate" name="dueDate" [for]="picker"></mat-datepicker-toggle>
+                                    <input matInput [matDatepicker]="picker" [(ngModel)]="projectData.dueDate" name="dueDate" />
+                                    <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
                                     <mat-datepicker #picker></mat-datepicker>
                                 </mat-form-field>
                             </div>

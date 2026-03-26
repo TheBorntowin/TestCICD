@@ -62,8 +62,16 @@ export class M2ProjectService {
         return this.http.put<M2ProjectSummary>(`${this.workspaceBase}/${workspaceId}/projects/${projectId}`, body);
     }
 
+    changeProjectStatus(workspaceId: string, projectId: string, status: string): Observable<M2ProjectSummary> {
+        return this.http.patch<M2ProjectSummary>(`${this.workspaceBase}/${workspaceId}/projects/${projectId}/status`, { status });
+    }
+
     archiveProject(workspaceId: string, projectId: string): Observable<void> {
         return this.http.delete<void>(`${this.workspaceBase}/${workspaceId}/projects/${projectId}`);
+    }
+
+    hardDeleteProject(workspaceId: string, projectId: string): Observable<void> {
+        return this.http.delete<void>(`${this.workspaceBase}/${workspaceId}/projects/${projectId}/permanent`);
     }
 
     getProjectMembers(workspaceId: string, projectId: string): Observable<M2ProjectMember[]> {
