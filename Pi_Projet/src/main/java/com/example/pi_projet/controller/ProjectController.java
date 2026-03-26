@@ -4,7 +4,6 @@ import com.example.pi_projet.entity.Project;
 import com.example.pi_projet.entity.Project.ProjectStatus;
 import com.example.pi_projet.entity.Project.Visibility;
 import com.example.pi_projet.entity.ProjectMember;
-import com.example.pi_projet.entity.ProjectMember.ProjectRole;
 import com.example.pi_projet.entity.User;
 import com.example.pi_projet.exception.Module2Exception;
 import com.example.pi_projet.service.ProjectMemberService;
@@ -113,6 +112,14 @@ public class ProjectController {
         return projectMemberService.getAll(projectId, currentUser.getId());
     }
 
+    @GetMapping("/{projectId}/available-members")
+    public List<Map<String, Object>> getAvailableMembers(@PathVariable UUID workspaceId,
+                                                          @PathVariable UUID projectId,
+                                                          HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
+        return projectMemberService.getAvailableWorkspaceMembers(workspaceId, projectId, currentUser.getId());
+    }
+
     @PostMapping("/{projectId}/members")
     @ResponseStatus(HttpStatus.CREATED)
     public ProjectMember addMember(@PathVariable UUID workspaceId,
@@ -123,7 +130,7 @@ public class ProjectController {
         return projectMemberService.add(
             projectId,
             Long.parseLong(body.get("userId")),
-            ProjectRole.valueOf(body.getOrDefault("role", "DEVELOPER")),
+            body.get("role"),
             currentUser.getId()
         );
     }
@@ -137,7 +144,7 @@ public class ProjectController {
         User currentUser = requireCurrentUser(request);
         return projectMemberService.updateRole(
             projectId, userId,
-            ProjectRole.valueOf(body.get("role")),
+            body.get("role"),
             currentUser.getId()
         );
     }

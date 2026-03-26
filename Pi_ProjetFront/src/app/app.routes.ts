@@ -81,6 +81,22 @@ export const routes: Routes = [
                 loadComponent: () => import("./pages/app/projects/project-details.component").then((c) => c.ProjectDetailsComponent),
             },
             {
+                path: "real-projects",
+                loadComponent: () => import("./pages/app/m2-projects/real-projects.component").then((c) => c.RealProjectsComponent),
+            },
+            {
+                path: "real-projects/:workspaceId/:projectId",
+                loadComponent: () => import("./pages/app/m2-projects/project-details.component").then((c) => c.ProjectDetailsComponent),
+            },
+            {
+                path: "m2-projects",
+                loadComponent: () => import("./pages/app/m2-projects/projects.component").then((c) => c.ProjectsComponent),
+            },
+            {
+                path: "m2-projects/:workspaceId/:projectId",
+                loadComponent: () => import("./pages/app/m2-projects/project-details.component").then((c) => c.ProjectDetailsComponent),
+            },
+            {
                 path: "employee",
                 loadComponent: () => import("./pages/app/employee/employee.component").then((c) => c.EmployeeComponent),
             },

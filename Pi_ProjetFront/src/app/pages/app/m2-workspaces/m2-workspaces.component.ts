@@ -30,6 +30,7 @@ interface WorkspaceViewRow {
 }
 
 interface M2CreateWorkspaceDialogData {
+    entityLabel?: "Workspace" | "Group";
     canSelectOrganization: boolean;
     organizationOptions: OrganizationOption[];
     defaultOrganizationId?: string | null;
@@ -45,7 +46,7 @@ interface M2CreateWorkspaceDialogData {
     template: `
         <div class="create-shell p-3 p-lg-4">
             <div class="d-flex align-items-center mb-3 pb-1 border-bottom">
-                <h3 class="mb-0 flex-grow-1">Create Workspace</h3>
+                <h3 class="mb-0 flex-grow-1">Create {{ entityLabel() }}</h3>
                 <button matIconButton (click)="close()"><mat-icon class="material-icons-outlined">close</mat-icon></button>
             </div>
 
@@ -57,18 +58,18 @@ interface M2CreateWorkspaceDialogData {
                         <div class="row gx-3">
                             <div class="col-12 mb-3">
                                 <mat-form-field appearance="outline" class="w-100">
-                                    <mat-label>Workspace Name</mat-label>
+                                    <mat-label>{{ entityLabel() }} Name</mat-label>
                                     <input matInput [ngModel]="name" (ngModelChange)="onNameChange(($event || '').toString())" placeholder="Ex: Data Engineering" />
-                                    <mat-hint>Use a clear team or course name.</mat-hint>
+                                    <mat-hint>Use a clear {{ entityLabel().toLowerCase() }} name.</mat-hint>
                                 </mat-form-field>
                                 @if (name.trim().length > 0 && name.trim().length < 3) {
-                                <p class="small theme-red mb-0">Workspace name should be at least 3 characters.</p>
+                                <p class="small theme-red mb-0">{{ entityLabel() }} name should be at least 3 characters.</p>
                                 }
                             </div>
 
                             <div class="col-12 mb-2">
                                 <mat-form-field appearance="outline" class="w-100">
-                                    <mat-label>Workspace Slug</mat-label>
+                                    <mat-label>{{ entityLabel() }} Slug</mat-label>
                                     <input matInput [ngModel]="slug" (ngModelChange)="onSlugChange(($event || '').toString())" placeholder="Ex: data-engineering" />
                                     <mat-hint>Lowercase letters, numbers, and hyphens only.</mat-hint>
                                 </mat-form-field>
@@ -80,7 +81,7 @@ interface M2CreateWorkspaceDialogData {
                             <div class="col-12">
                                 <div class="preview-pill">
                                     <span class="small text-secondary">Preview URL key</span>
-                                    <strong>{{ resolvedSlugPreview() || "(enter workspace name)" }}</strong>
+                                    <strong>{{ resolvedSlugPreview() || ("(enter " + entityLabel().toLowerCase() + " name)") }}</strong>
                                 </div>
                             </div>
                         </div>
@@ -158,7 +159,7 @@ interface M2CreateWorkspaceDialogData {
                         <button matButton matStepperPrevious>Back</button>
                         <button matButton="filled" [disabled]="!canSubmit()" (click)="submit()">
                             <mat-icon class="material-icons-outlined me-1">add_circle</mat-icon>
-                            Create Workspace
+                            Create {{ entityLabel() }}
                         </button>
                     </div>
                 </mat-step>
@@ -223,6 +224,10 @@ export class M2CreateWorkspaceDialogComponent {
     slug = "";
     organizationId = this.data?.defaultOrganizationId || "";
     private slugManuallyEdited = false;
+
+    entityLabel(): "Workspace" | "Group" {
+        return this.data?.entityLabel || "Workspace";
+    }
 
     onNameChange(value: string): void {
         this.name = value;
@@ -355,6 +360,10 @@ export class M2CreateWorkspaceDialogComponent {
 
                     <div class="col-auto order-2 order-lg-3 mb-3 mb-xl-0">
                         <button matButton (click)="loadWorkspaces()"><mat-icon class="material-icons-outlined">refresh</mat-icon> Refresh</button>
+                        <button matButton="filled" class="ms-1" [disabled]="!permissionService.canCreateWorkspace()" (click)="openCreateGroupDialog()">
+                            <mat-icon class="material-icons-outlined">group_add</mat-icon>
+                            Create Group
+                        </button>
                         <button matButton="filled" class="ms-1" [disabled]="!permissionService.canCreateWorkspace()" (click)="openCreateWorkspaceDialog()">
                             <mat-icon class="material-icons-outlined">add</mat-icon>
                             Workspace
@@ -390,6 +399,10 @@ export class M2CreateWorkspaceDialogComponent {
                     <button matButton="filled" [disabled]="!permissionService.canCreateWorkspace()" (click)="openCreateWorkspaceDialog()">
                         <mat-icon class="material-icons-outlined">add_circle</mat-icon>
                         Create Workspace
+                    </button>
+                    <button matButton class="ms-2" [disabled]="!permissionService.canCreateWorkspace()" (click)="openCreateGroupDialog()">
+                        <mat-icon class="material-icons-outlined">group_add</mat-icon>
+                        Create Group
                     </button>
                 </mat-card-content>
             </mat-card>
@@ -549,6 +562,14 @@ export class M2WorkspacesComponent implements OnInit {
     }
 
     openCreateWorkspaceDialog(): void {
+        this.openCreateEntityDialog("Workspace");
+    }
+
+    openCreateGroupDialog(): void {
+        this.openCreateEntityDialog("Group");
+    }
+
+    private openCreateEntityDialog(entityLabel: "Workspace" | "Group"): void {
         if (!this.permissionService.canCreateWorkspace()) {
             this.snackBar.open("You do not have permission to create workspaces.", "Close", { duration: 4000 });
             return;
@@ -566,6 +587,7 @@ export class M2WorkspacesComponent implements OnInit {
             maxWidth: "95vw",
             autoFocus: false,
             data: {
+                entityLabel,
                 canSelectOrganization: isGlobalAdmin,
                 organizationOptions: this.organizationOptions(),
                 defaultOrganizationId: defaultOrgId,
@@ -592,11 +614,11 @@ export class M2WorkspacesComponent implements OnInit {
 
             this.workspaceService.createWorkspace(payload).subscribe({
                 next: () => {
-                    this.snackBar.open("Workspace created successfully", "Close", { duration: 3000 });
+                    this.snackBar.open(`${entityLabel} created successfully`, "Close", { duration: 3000 });
                     this.loadWorkspaces();
                 },
                 error: (error: HttpErrorResponse) => {
-                    this.snackBar.open(`Failed to create workspace (${this.errorMessage(error)})`, "Close", { duration: 5000 });
+                    this.snackBar.open(`Failed to create ${entityLabel.toLowerCase()} (${this.errorMessage(error)})`, "Close", { duration: 5000 });
                 },
             });
         });

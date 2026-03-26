@@ -7,14 +7,15 @@ import com.example.pi_projet.entity.ProjectMember;
 import com.example.pi_projet.entity.ProjectMember.ProjectRole;
 import com.example.pi_projet.entity.ProjectTemplate;
 import com.example.pi_projet.entity.Workspace;
+import com.example.pi_projet.entity.WorkspaceMember;
 import com.example.pi_projet.entity.User;
 import com.example.pi_projet.exception.Module2Exception;
 import static com.example.pi_projet.exception.Module2Exception.ErrorCode.*;
 import com.example.pi_projet.service.ProjectTemplateService;
 import com.example.pi_projet.service.ProjectMemberService;
-import com.example.pi_projet.entity.WorkspaceMember.WorkspaceRole;
 import com.example.pi_projet.repository.ProjectMemberRepository;
 import com.example.pi_projet.repository.ProjectRepository;
+import com.example.pi_projet.repository.WorkspaceMemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,7 +41,9 @@ public class ProjectService {
     private final com.example.pi_projet.repository.UserRepository userRepo;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final WorkspaceQuotaHelper quotaHelper;
-    private final WorkspaceAuthHelper authHelper;
+    private final ProjectAuthorizationService projectAuthorizationService;
+    private final ProjectRoleMapper projectRoleMapper;
+    private final WorkspaceMemberRepository workspaceMemberRepository;
     private final M2AuditLogService auditLogService;
 
     public Page<Project> getVisible(UUID workspaceId, Long userId, Pageable pageable) {
@@ -61,8 +64,11 @@ public class ProjectService {
 
     public Project getById(UUID projectId, Long requesterId) {
         Project p = findOrThrow(projectId);
-        // requester must be project member
-        if (!projectMemberRepo.existsByProjectIdAndUserId(projectId, requesterId)) {
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Requester user not found"));
+
+        if (!projectMemberRepo.existsByProjectIdAndUserId(projectId, requesterId)
+            && !projectAuthorizationService.canManageProject(requester, p)) {
             throw new Module2Exception(FORBIDDEN, "Requester is not a project member");
         }
         return p;
@@ -74,9 +80,11 @@ public class ProjectService {
                           Long requesterId) {
         if (!userRepo.existsById(requesterId)) throw new Module2Exception(NOT_FOUND, "Creator user not found");
         Workspace ws = workspaceService.getById(workspaceId);
-        // Requester must be active workspace member with admin/manager
-        if (!authHelper.isWorkspaceAdminOrManager(workspaceId, requesterId)) {
-            throw new Module2Exception(FORBIDDEN, "Only workspace admin or manager can create projects.");
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Creator user not found"));
+
+        if (!projectAuthorizationService.canCreateProject(requester, ws)) {
+            throw new Module2Exception(FORBIDDEN, "Only org owner/admin, manager, or tutor can create projects.");
         }
 
         // Quota check at org level
@@ -97,9 +105,8 @@ public class ProjectService {
             .endDate(endDate)
             .build();
         p = projectRepo.save(p);
-        // assign manager or professor based on org type stub
-        // Note: ProjectRole enum does not include academic-specific roles in this module.
-        ProjectRole assigned = ProjectRole.PROJECT_MANAGER;
+        String orgType = resolveWorkspaceOrgType(ws);
+        ProjectRole assigned = orgType.equals("academic") ? ProjectRole.PROFESSOR : ProjectRole.PROJECT_MANAGER;
         projectMemberRepo.save(ProjectMember.builder()
             .project(p).userId(requesterId).role(assigned).build());
 
@@ -119,6 +126,11 @@ public class ProjectService {
         }
         if (!userRepo.existsById(requesterId)) throw new Module2Exception(NOT_FOUND, "Creator user not found");
         Workspace ws = workspaceService.getById(workspaceId);
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Creator user not found"));
+        if (!projectAuthorizationService.canCreateProject(requester, ws)) {
+            throw new Module2Exception(FORBIDDEN, "Only org owner/admin, manager, or tutor can create projects.");
+        }
         Project p = Project.builder()
             .workspace(ws)
             .templateId(template.getId())
@@ -128,8 +140,9 @@ public class ProjectService {
             .visibility(template.getDefaultVisibility() == ProjectTemplate.DefaultVisibility.PUBLIC ? Visibility.PUBLIC : Visibility.PRIVATE)
             .build();
         p = projectRepo.save(p);
+        String orgType = resolveWorkspaceOrgType(ws);
         projectMemberRepo.save(ProjectMember.builder()
-            .project(p).userId(requesterId).role(ProjectRole.PROJECT_MANAGER).build());
+            .project(p).userId(requesterId).role(orgType.equals("academic") ? ProjectRole.PROFESSOR : ProjectRole.PROJECT_MANAGER).build());
         // increment usage
         template.setUsageCount(template.getUsageCount() + 1);
         templateService.saveTemplate(template); // persist usage increment
@@ -148,22 +161,19 @@ public class ProjectService {
             throw new Module2Exception(CONFLICT, "User already assigned to project");
         }
         var assigner = userRepo.findById(assignedBy).orElseThrow(() -> new Module2Exception(NOT_FOUND, "Assigner user not found"));
-
-        // check assigner permissions: project manager/professor or workspace admin
-        boolean allowed = false;
-        try {
-            var prOpt = projectMemberRepo.findByProjectIdAndUserId(projectId, assignedBy);
-            if (prOpt.isPresent()) {
-                var pr = prOpt.get();
-                if (pr.getRole() == ProjectRole.PROJECT_MANAGER || pr.getRole() == ProjectRole.PROFESSOR) allowed = true;
-            }
-        } catch (Exception ignored) {}
-        if (!allowed && !authHelper.isWorkspaceAdminOrManager(project.getWorkspace().getId(), assignedBy)) {
+        if (!projectAuthorizationService.canManageProjectMembers(assigner, project)) {
             throw new Module2Exception(FORBIDDEN, "Requester lacks permission to add project members");
         }
+
+        WorkspaceMember workspaceMember = workspaceMemberRepository
+            .findByWorkspaceIdAndUserId(project.getWorkspace().getId(), userId)
+            .orElseThrow(() -> new Module2Exception(BAD_REQUEST, "User is not a member of the project's workspace"));
+
+        String orgType = resolveWorkspaceOrgType(project.getWorkspace());
+        ProjectRole finalRole = projectRoleMapper.resolveAssignmentRole(role, workspaceMember.getRole(), orgType);
         
         ProjectMember pm = ProjectMember.builder()
-            .project(project).userId(userId).role(role).assignedByUser(assigner).build();
+            .project(project).userId(userId).role(finalRole).assignedByUser(assigner).build();
         pm = projectMemberRepo.save(pm);
         return project;
     }
@@ -173,6 +183,12 @@ public class ProjectService {
                           Visibility visibility, LocalDate startDate, LocalDate endDate,
                           Long requesterId) {
         Project p = findOrThrow(projectId);
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Requester user not found"));
+        if (!projectAuthorizationService.canManageProject(requester, p)) {
+            throw new Module2Exception(FORBIDDEN, "Not allowed to update project");
+        }
+
         if (name != null)        p.setName(name);
         if (description != null) p.setDescription(description);
         if (visibility != null)  p.setVisibility(visibility);
@@ -184,15 +200,9 @@ public class ProjectService {
     @Transactional
     public Project changeStatus(UUID projectId, ProjectStatus status, Long requesterId) {
         Project p = findOrThrow(projectId);
-
-        // permission: project manager/professor or workspace admin
-        boolean allowed = false;
-        var pmOpt = projectMemberRepo.findByProjectIdAndUserId(projectId, requesterId);
-        if (pmOpt.isPresent()) {
-            var pm = pmOpt.get();
-            if (pm.getRole() == ProjectRole.PROJECT_MANAGER || pm.getRole() == ProjectRole.PROFESSOR) allowed = true;
-        }
-        if (!allowed && !authHelper.isWorkspaceAdminOrManager(p.getWorkspace().getId(), requesterId)) {
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Requester user not found"));
+        if (!projectAuthorizationService.canManageProject(requester, p)) {
             throw new Module2Exception(FORBIDDEN, "Not allowed to change project status");
         }
 
@@ -217,14 +227,9 @@ public class ProjectService {
     @Transactional
     public void delete(UUID projectId, Long requesterId) {
         Project p = findOrThrow(projectId);
-        // only workspace admin or project manager can archive
-        boolean allowed = false;
-        var pmOpt = projectMemberRepo.findByProjectIdAndUserId(projectId, requesterId);
-        if (pmOpt.isPresent()) {
-            var pm = pmOpt.get();
-            if (pm.getRole() == ProjectRole.PROJECT_MANAGER || pm.getRole() == ProjectRole.PROFESSOR) allowed = true;
-        }
-        if (!allowed && !authHelper.isWorkspaceAdminOrManager(p.getWorkspace().getId(), requesterId)) {
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Requester user not found"));
+        if (!projectAuthorizationService.canManageProject(requester, p)) {
             throw new Module2Exception(FORBIDDEN, "Not allowed to delete/archive project");
         }
         p.setStatus(ProjectStatus.ARCHIVED);
@@ -243,5 +248,15 @@ public class ProjectService {
     private boolean isGlobalAdminRole(User.RoleName role) {
         return role == User.RoleName.SUPER_ADMIN
             || role == User.RoleName.ADMIN;
+    }
+
+    private String resolveWorkspaceOrgType(Workspace workspace) {
+        if (workspace.getOrgType() != null && !workspace.getOrgType().isBlank()) {
+            return workspace.getOrgType().trim().toLowerCase();
+        }
+        if (workspace.getOrganization() != null && workspace.getOrganization().getOrgType() != null) {
+            return workspace.getOrganization().getOrgType().name().toLowerCase();
+        }
+        return "enterprise";
     }
 }

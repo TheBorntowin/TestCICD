@@ -13,6 +13,8 @@ import { forkJoin, of } from "rxjs";
 import { catchError, take } from "rxjs/operators";
 import { AuthService } from "../../../auth/auth.service";
 import { CircleProgressBlueComponent } from "../../../components/charts/circle-progress-blue.component";
+import { CreateProjectWorkflowDialogComponent, CreateProjectWorkflowDialogResult } from "../m2-projects/create-project-workflow-dialog.component";
+import { M2ProjectService } from "../m2-projects/m2-project.service";
 import { InviteMemberModalComponent } from "./invite-member-modal.component";
 import { MemberRoleEditDialogComponent, MemberRoleEditDialogResult } from "./member-role-edit-dialog.component";
 import { MemberUnassignDialogComponent, MemberUnassignDialogResult } from "./member-unassign-dialog.component";
@@ -358,8 +360,12 @@ interface WorkspaceActivity {
                             </ng-template>
 
                             <div class="p-3">
-                                <div class="d-flex justify-content-end mb-3">
-                                    <button matButton="filled" [disabled]="!canManageWorkspace()" (click)="showPlaceholder('Create Project')">
+                                <div class="d-flex justify-content-end gap-2 mb-3">
+                                    <button matButton (click)="goToRealProjects()">
+                                        <mat-icon class="material-icons-outlined">dataset</mat-icon>
+                                        Show All
+                                    </button>
+                                    <button matButton="filled" [disabled]="!canManageWorkspace()" (click)="openCreateProjectDialog()">
                                         <mat-icon class="material-icons-outlined">add</mat-icon>
                                         Create Project
                                     </button>
@@ -371,7 +377,7 @@ interface WorkspaceActivity {
                                 <div class="row gx-3">
                                     @for (project of projects(); track project.id) {
                                     <div class="col-12 col-md-6">
-                                        <mat-card class="mb-3 bg-light-theme">
+                                        <mat-card class="mb-3 bg-light-theme" [style.cursor]="'pointer'" (click)="openProjectDetails(project.id)">
                                             <mat-card-content>
                                                 <h4 class="mb-1">{{ project.name }}</h4>
                                                 <p class="text-secondary small mb-2">{{ project.description || "No description" }}</p>
@@ -473,6 +479,7 @@ export class M2WorkspaceDetailsComponent implements OnInit {
     private readonly router = inject(Router);
     private readonly workspaceService = inject(M2WorkspaceService);
     private readonly workspaceMemberService = inject(WorkspaceMemberService);
+    private readonly projectService = inject(M2ProjectService);
     private readonly authService = inject(AuthService);
     private readonly dialog = inject(MatDialog);
     private readonly snackBar = inject(MatSnackBar);
@@ -736,6 +743,88 @@ export class M2WorkspaceDetailsComponent implements OnInit {
                 this.loadMembers(workspaceId);
             });
         }
+    }
+
+    openCreateProjectDialog(): void {
+        if (!this.canManageWorkspace()) {
+            return;
+        }
+
+        const workspaceId = this.route.snapshot.paramMap.get("workspaceId");
+        if (!workspaceId) {
+            return;
+        }
+
+        const ref = this.dialog.open(CreateProjectWorkflowDialogComponent, {
+            width: "760px",
+            maxWidth: "95vw",
+            autoFocus: false,
+            data: {
+                workspaceId,
+                workspaceName: this.workspace()?.name || "Workspace",
+                orgType: this.normalizedOrgType(),
+                members: this.members().map((member) => ({
+                    userId: member.userId,
+                    fullName: member.fullName,
+                    email: member.email,
+                    avatarUrl: member.avatarUrl,
+                    workspaceRole: member.workspaceRole,
+                })),
+            },
+        });
+
+        ref.afterClosed().pipe(take(1)).subscribe((result?: CreateProjectWorkflowDialogResult) => {
+            if (!result?.payload || !(result.payload["name"] as string | undefined)?.trim()) {
+                return;
+            }
+
+            this.projectService.createProject(workspaceId, result.payload).subscribe({
+                next: (created) => {
+                    const assignments = (result.assignments || []).filter((row) => row.userId !== this.authService.currentUser()?.id);
+                    if (assignments.length === 0) {
+                        this.projects.update((rows) => [created, ...rows]);
+                        this.snackBar.open("Project created successfully.", "Open", { duration: 3500 })
+                            .onAction()
+                            .pipe(take(1))
+                            .subscribe(() => this.router.navigate(["/app/real-projects"], { queryParams: { workspaceId } }));
+                        return;
+                    }
+
+                    const assignRequests = assignments.map((assignment) =>
+                        this.projectService.addProjectMember(workspaceId, created.id, assignment.userId, assignment.role).pipe(
+                            catchError(() => of(null))
+                        )
+                    );
+
+                    forkJoin(assignRequests).subscribe(() => {
+                        this.projects.update((rows) => [created, ...rows]);
+                        this.snackBar.open("Project and members created successfully.", "Open", { duration: 3500 })
+                            .onAction()
+                            .pipe(take(1))
+                            .subscribe(() => this.router.navigate(["/app/real-projects"], { queryParams: { workspaceId } }));
+                    });
+                },
+                error: (error: HttpErrorResponse) => {
+                    this.snackBar.open(`Failed to create project: ${this.errorMessage(error)}`, "Close", { duration: 4500 });
+                },
+            });
+        });
+    }
+
+    goToRealProjects(): void {
+        const workspaceId = this.route.snapshot.paramMap.get("workspaceId");
+        if (!workspaceId) {
+            return;
+        }
+        this.router.navigate(["/app/real-projects"], { queryParams: { workspaceId } });
+    }
+
+    openProjectDetails(projectId: string): void {
+        const workspaceId = this.route.snapshot.paramMap.get("workspaceId");
+        if (!workspaceId || !projectId) {
+            return;
+        }
+        this.router.navigate(["/app/real-projects", workspaceId, projectId]);
     }
 
     openEditWorkspaceDialog(): void {
