@@ -1,37 +1,31 @@
 import { CommonModule } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
-import { Component, OnInit, ViewChild, computed, effect, inject, signal } from "@angular/core";
+import { Component, OnInit, computed, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router, RouterLink } from "@angular/router";
 import { MatButtonModule } from "@angular/material/button";
-import { MatButtonToggleModule } from "@angular/material/button-toggle";
 import { MatCardModule } from "@angular/material/card";
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 import { MatMenuModule } from "@angular/material/menu";
-import { MatPaginator, MatPaginatorModule } from "@angular/material/paginator";
 import { MatSelectModule } from "@angular/material/select";
 import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
-import { MatSort, MatSortModule } from "@angular/material/sort";
-import { MatTableDataSource, MatTableModule } from "@angular/material/table";
+import { MatTableModule } from "@angular/material/table";
 import { AuthService } from "../../../auth/auth.service";
 import { OrganizationOption } from "../../../auth/user.model";
 import { M2CreateWorkspaceRequest, M2Workspace, M2WorkspaceService } from "./m2-workspace.service";
+import { WorkspacePermissionService } from "./workspace-permission.service";
 
-type ViewMode = "day" | "week" | "month";
-type SortDirection = "asc" | "desc";
-type SortColumn = "name" | "slug" | "organization" | "createdAt";
-type Category = "All" | "Owned" | "Other";
-
-interface M2WorkspaceView {
+interface WorkspaceViewRow {
     id: string;
     name: string;
     slug: string;
     ownerId: number;
-    organizationName: string;
     createdAt: string;
+    organizationName: string;
+    orgType: string;
 }
 
 interface M2CreateWorkspaceDialogData {
@@ -79,7 +73,7 @@ interface M2CreateWorkspaceDialogData {
                 </div>
                 } @else {
                 <div class="col-12 mb-3">
-                    <p class="small text-secondary mb-0">Organization: {{ data?.defaultOrganizationName || 'Current organization' }}</p>
+                    <p class="small text-secondary mb-0">Organization: {{ data?.defaultOrganizationName || "Current organization" }}</p>
                 </div>
                 }
             </div>
@@ -123,81 +117,40 @@ export class M2CreateWorkspaceDialogComponent {
         MatCardModule,
         MatIconModule,
         MatButtonModule,
-        MatButtonToggleModule,
         MatFormFieldModule,
         MatInputModule,
-        MatSelectModule,
         MatTableModule,
-        MatPaginatorModule,
-        MatSortModule,
-        MatMenuModule,
         MatSnackBarModule,
         MatDialogModule,
+        MatMenuModule,
     ],
     template: `
         <div class="container-fluid fade-in mb-3 mb-lg-4">
             <mat-card class="bg-light-theme shadow-none pt-3 pb-lg-3 px-3">
                 <div class="row gx-3 align-items-center">
-                    <div class="col col-md mb-3 mb-xl-0 py-1 order-1 order-lg-1">
+                    <div class="col-12 col-md mb-3 mb-xl-0 py-1 order-1 order-lg-1">
                         <h3 class="mb-1">Workspaces</h3>
-                        <p class="small">
-                            <span routerLink="/app/dashboard" class="me-2 text-theme style-none">
-                                <mat-icon class="material-icons-outlined align-middle text-sm">house</mat-icon> Home
-                            </span>
+                        <p class="small mb-1">
+                            <span routerLink="/app/dashboard" class="me-2 text-theme style-none"><mat-icon class="material-icons-outlined align-middle text-sm">house</mat-icon> Home</span>
                             <mat-icon class="material-icons-outlined align-middle text-sm me-2">chevron_right</mat-icon>
                             Workspaces
                         </p>
-                        <p class="small text-secondary mb-0">Organization: {{ organizationName() }}</p>
-                        <p class="small text-secondary mb-0">Org role: {{ organizationMembershipRole() }}</p>
+                        <p class="small text-secondary mb-0">Only workspaces you are a member of are shown.</p>
                     </div>
 
-                    @if(filterOn()) {
-                    <div class="col-12 col-sm-6 col-lg-auto mb-3 mb-xl-0 order-3 order-lg-2">
-                        <mat-button-toggle-group [value]="viewMode()" (change)="viewMode.set($event.value)">
-                            <mat-button-toggle value="day">Day</mat-button-toggle>
-                            <mat-button-toggle value="week">Week</mat-button-toggle>
-                            <mat-button-toggle value="month">Month</mat-button-toggle>
-                        </mat-button-toggle-group>
-                    </div>
-
-                    <div class="col-12 col-sm-6 col-lg-3 col-xxl-2 mb-3 mb-xl-0 order-4 order-lg-3">
+                    <div class="col-12 col-lg-4 mb-3 mb-xl-0 order-3 order-lg-2">
                         <mat-form-field appearance="outline" class="w-100 inline-small">
-                            <mat-label>Search</mat-label>
+                            <mat-label>Search workspace</mat-label>
                             <mat-icon matPrefix>search</mat-icon>
-                            <input matInput [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)" placeholder="Search workspace" />
+                            <input matInput [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" placeholder="Search by name, slug, org" />
                         </mat-form-field>
                     </div>
 
-                    <div class="col-12 col-sm-6 col-lg-3 col-xxl-2 mb-3 mb-xl-0 order-5 order-lg-4">
-                        <mat-form-field appearance="outline" class="w-100 inline-small">
-                            <mat-select [ngModel]="sortColumn()" (ngModelChange)="sortColumn.set($event)">
-                                <mat-option value="name">Workspace Name</mat-option>
-                                <mat-option value="slug">Slug</mat-option>
-                                <mat-option value="organization">Organization</mat-option>
-                                <mat-option value="createdAt">Created Date</mat-option>
-                            </mat-select>
-                            <mat-icon matPrefix>sort</mat-icon>
-                        </mat-form-field>
-                    </div>
-
-                    <div class="col-auto mb-3 mb-xl-0 order-6 order-lg-5">
-                        <button matIconButton (click)="toggleSortDirection()">
-                            @if(sortDirection() === "asc") {
-                            <span class="material-symbols-outlined">edit_arrow_down</span>
-                            } @else {
-                            <span class="material-symbols-outlined">edit_arrow_up</span>
-                            }
-                        </button>
-                    </div>
-                    }
-
-                    <div class="col-auto order-2 order-lg-6 mb-3 mb-xl-0">
-                        <button matIconButton (click)="toggleFilter()">
-                            @if(filterOn()) {
-                            <mat-icon class="material-icons-outlined">filter_alt_off</mat-icon>
-                            } @else {
-                            <mat-icon class="material-icons-outlined">filter_alt</mat-icon>
-                            }
+                    <div class="col-auto order-2 order-lg-3 mb-3 mb-xl-0">
+                        <button matButton (click)="loadWorkspaces()"><mat-icon class="material-icons-outlined">refresh</mat-icon> Refresh</button>
+                        <button matButton="filled" class="ms-1" [disabled]="!permissionService.canCreateWorkspace()" (click)="openCreateWorkspaceDialog()">
+                            <mat-icon class="material-icons-outlined">add</mat-icon>
+                            Workspace
                         </button>
                     </div>
                 </div>
@@ -205,13 +158,13 @@ export class M2CreateWorkspaceDialogComponent {
         </div>
 
         <div class="container fade-in">
-            @if(lastError()) {
-            <mat-card class="mb-3 border theme-red">
+            @if (lastError()) {
+            <mat-card class="mb-3 mb-lg-4 border theme-red">
                 <mat-card-content>
                     <div class="d-flex align-items-start">
                         <mat-icon class="material-icons-outlined me-2 theme-red">error</mat-icon>
                         <div>
-                            <p class="fw-medium mb-1">Workspace API Error</p>
+                            <p class="fw-medium mb-1">Failed to load workspaces</p>
                             <p class="small mb-0">{{ lastError() }}</p>
                         </div>
                     </div>
@@ -219,363 +172,196 @@ export class M2CreateWorkspaceDialogComponent {
             </mat-card>
             }
 
-            <div class="row gx-3 gx-lg-4">
-                <div class="col-12 col-lg-6 col-xl-4">
-                    <mat-card class="bg-theme text-white mb-3 mb-lg-4">
-                        <mat-card-content>
-                            <h1 class="mb-3">Create and organize<br />workspaces</h1>
-                            <p class="opacity-75 mb-md-4 pb-lg-2">Create a workspace for your team and keep projects aligned inside the right organization context.</p>
+            @if (!isLoading() && filteredWorkspaces().length === 0) {
+            <mat-card class="mb-3 mb-lg-4">
+                <mat-card-content class="text-center py-5">
+                    <div class="avatar avatar-80 rounded-circle bg-light-theme text-theme d-inline-flex align-items-center justify-content-center mb-3">
+                        <mat-icon class="material-icons-outlined fs-1">workspaces</mat-icon>
+                    </div>
+                    <h3 class="mb-2">You have no workspaces yet</h3>
+                    <p class="text-secondary mb-3">You can only see workspaces where you are explicitly a member.</p>
+                    <button matButton="filled" [disabled]="!permissionService.canCreateWorkspace()" (click)="openCreateWorkspaceDialog()">
+                        <mat-icon class="material-icons-outlined">add_circle</mat-icon>
+                        Create Workspace
+                    </button>
+                </mat-card-content>
+            </mat-card>
+            }
 
-                            @if (canCreateWorkspace()) {
-                            <button matButton="elevated" (click)="openCreateWorkspaceDialog()"><mat-icon class="material-icons-outlined">add_circle</mat-icon> Workspace</button>
-                            } @else {
-                            <button matButton="elevated" disabled><mat-icon class="material-icons-outlined">lock</mat-icon> Workspace</button>
-                            }
-                            <button matButton="filled" class="ms-1" (click)="showCreateProjectPlaceholder()"><mat-icon class="material-icons-outlined">add</mat-icon> Create Project</button>
-                            @if (!canCreateWorkspace()) {
-                            <p class="small mt-2 mb-0 text-warning">Only SUPER_ADMIN, ADMIN, MANAGER, or TUTOR can create workspaces.</p>
-                            }
+            @if (filteredWorkspaces().length > 0) {
+            <div class="row gx-3 gx-lg-4 mb-3">
+                @for (workspace of filteredWorkspaces(); track workspace.id) {
+                <div class="col-12 col-sm-6 col-lg-4">
+                    <mat-card class="overflow-hidden mb-3 mb-lg-4" [class.opacity-50]="!canOpenWorkspace(workspace)" [style.cursor]="canOpenWorkspace(workspace) ? 'pointer' : 'not-allowed'" (click)="openWorkspaceDetails(workspace)">
+                        <mat-card-content>
+                            <div class="d-flex align-items-start mb-3">
+                                <div class="avatar avatar-50 text-theme rounded bg-light-theme me-3 d-flex align-items-center justify-content-center">
+                                    <mat-icon class="material-icons-outlined">workspaces</mat-icon>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h4 class="mb-1 text-truncated">{{ workspace.name }}</h4>
+                                    <p class="text-secondary small mb-0">{{ workspace.slug }}</p>
+                                </div>
+                            </div>
+
+                            <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                                <span class="badge badge-light">{{ workspace.organizationName }}</span>
+                                <span class="badge" [ngClass]="workspace.orgType === 'ACADEMIC' ? 'theme-violet' : 'theme-blue'">{{ workspace.orgType === "ACADEMIC" ? "Academic" : "Enterprise" }}</span>
+                                @if (isDefaultWorkspace(workspace)) {
+                                <span class="badge theme-green">Default Workspace</span>
+                                }
+                            </div>
+
+                            <p class="text-secondary small mb-0">Created {{ workspace.createdAt }}</p>
                         </mat-card-content>
                     </mat-card>
                 </div>
-
-                <div class="col-12 col-lg-6 col-xl-8">
-                    <div class="row gx-3">
-                        <div class="col-6 col-md-3">
-                            <mat-card class="mb-3 mb-lg-4" [class]="selectedCategory() === 'All' ? 'bg-theme text-white' : 'bg-light-theme text-theme'" (click)="selectedCategory.set('All')">
-                                <mat-card-content>
-                                    <h3 class="mb-1">{{ workspaceRows().length }}</h3>
-                                    <p class="opacity-75">All</p>
-                                </mat-card-content>
-                            </mat-card>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <mat-card class="mb-3 mb-lg-4" [class]="selectedCategory() === 'Owned' ? 'bg-theme text-white' : 'bg-light-theme text-theme'" (click)="selectedCategory.set('Owned')">
-                                <mat-card-content>
-                                    <h3 class="mb-1">{{ ownedCount() }}</h3>
-                                    <p class="opacity-75">Owned</p>
-                                </mat-card-content>
-                            </mat-card>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <mat-card class="mb-3 mb-lg-4" [class]="selectedCategory() === 'Other' ? 'bg-theme text-white' : 'bg-light-theme text-theme'" (click)="selectedCategory.set('Other')">
-                                <mat-card-content>
-                                    <h3 class="mb-1">{{ otherCount() }}</h3>
-                                    <p class="opacity-75">Shared</p>
-                                </mat-card-content>
-                            </mat-card>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <mat-card class="mb-3 mb-lg-4 bg-light-theme text-theme">
-                                <mat-card-content>
-                                    <h3 class="mb-1">{{ organizationCount() }}</h3>
-                                    <p class="opacity-75">Organizations</p>
-                                </mat-card-content>
-                            </mat-card>
-                        </div>
-                    </div>
-                </div>
+                }
             </div>
 
             <mat-card class="mb-3 mb-lg-4">
-                <mat-card-header>
-                    <div class="w-100">
-                        <div class="row gx-3 align-items-center">
-                            <div class="col-auto mb-3">
-                                <div class="avatar avatar-40 text-theme rounded">
-                                    <mat-icon class="material-icons-outlined">grid_view</mat-icon>
-                                </div>
-                            </div>
-                            <div class="col mb-3">
-                                <h3 class="mb-1">Workspace Cards</h3>
-                                <p class="text-secondary small">{{ filteredItems().length }} workspace(s) with current filters</p>
-                            </div>
-                        </div>
-                    </div>
-                </mat-card-header>
                 <mat-card-content>
-                    <div class="row gx-3 gx-lg-4">
-                        @for (workspace of filteredItems(); track workspace.id) {
-                        <div class="col-12 col-sm-6 col-lg-4">
-                            <mat-card class="overflow-hidden mb-3 mb-lg-4" style="cursor: pointer" (click)="openWorkspaceDetails(workspace.id)">
-                                <mat-card-content>
-                                    <div class="d-flex align-items-start mb-3">
-                                        <div class="avatar avatar-50 text-theme rounded bg-light-theme me-3">
-                                            <mat-icon class="material-icons-outlined">workspaces</mat-icon>
-                                        </div>
-                                        <div class="flex-grow-1">
-                                            <h4 class="mb-1 text-truncated">{{ workspace.name }}</h4>
-                                            <p class="text-secondary small mb-0">{{ workspace.slug }}</p>
-                                        </div>
-                                        <button matIconButton [matMenuTriggerFor]="workspaceActionMenu" (click)="selectWorkspaceForAction(workspace.id); $event.stopPropagation()"><mat-icon class="material-icons-outlined">more_vert</mat-icon></button>
-                                    </div>
-
-                                    <div class="row gx-2 mb-2">
-                                        <div class="col-auto"><span class="badge badge-light">{{ workspace.organizationName }}</span></div>
-                                        <div class="col-auto"><span class="badge" [ngClass]="workspace.ownerId === currentUserId() ? 'theme-green' : 'theme-orange'">{{ workspace.ownerId === currentUserId() ? 'Owner' : 'Member' }}</span></div>
-                                    </div>
-
-                                    <p class="text-secondary small mb-0">Created {{ workspace.createdAt }}</p>
-                                </mat-card-content>
-                            </mat-card>
+                    <div class="row gx-3 align-items-center mb-3">
+                        <div class="col">
+                            <h3 class="mb-1">Workspace Table</h3>
+                            <p class="text-secondary small mb-0">Visibility is enforced by backend membership rules.</p>
                         </div>
-                        }
-
-                        @if (!isLoading() && filteredItems().length === 0) {
-                        <div class="col-12 text-center py-5">
-                            <img src="assets/img/noproduct.png" alt="No workspace" class="width-300 mt-4" />
-                            <h3 class="mb-1">No workspace found</h3>
-                            <p class="text-secondary">Try changing filters or create a new workspace.</p>
-                        </div>
-                        }
                     </div>
+
+                    <table mat-table [dataSource]="filteredWorkspaces()" class="bg-none responsive-table">
+                        <ng-container matColumnDef="name">
+                            <th mat-header-cell *matHeaderCellDef>Workspace</th>
+                            <td mat-cell *matCellDef="let item" class="py-2">
+                                <h4 class="mb-0">{{ item.name }}</h4>
+                                <p class="text-secondary small mb-0">{{ item.slug }}</p>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="organization">
+                            <th mat-header-cell *matHeaderCellDef>Organization</th>
+                            <td mat-cell *matCellDef="let item" class="py-2">
+                                <span class="badge badge-light me-1">{{ item.organizationName }}</span>
+                                <span class="badge" [ngClass]="item.orgType === 'ACADEMIC' ? 'theme-violet' : 'theme-blue'">{{ item.orgType === "ACADEMIC" ? "Academic" : "Enterprise" }}</span>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="default">
+                            <th mat-header-cell *matHeaderCellDef>Flags</th>
+                            <td mat-cell *matCellDef="let item" class="py-2">
+                                @if (isDefaultWorkspace(item)) {
+                                <span class="badge theme-green">Default Workspace</span>
+                                } @else {
+                                <span class="text-secondary small">-</span>
+                                }
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="createdAt">
+                            <th mat-header-cell *matHeaderCellDef>Created</th>
+                            <td mat-cell *matCellDef="let item" class="py-2">{{ item.createdAt }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Actions</th>
+                            <td mat-cell *matCellDef="let item" class="py-2">
+                                <button matButton="filled" [disabled]="!canOpenWorkspace(item)" (click)="openWorkspaceDetails(item, $event)">
+                                    Open
+                                </button>
+                            </td>
+                        </ng-container>
+
+                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: displayedColumns" [style.cursor]="canOpenWorkspace(row) ? 'pointer' : 'not-allowed'" (click)="openWorkspaceDetails(row)"></tr>
+                    </table>
                 </mat-card-content>
             </mat-card>
-
-            <mat-card>
-                <mat-card-header>
-                    <div class="w-100">
-                        <div class="row gx-3 align-items-center">
-                            <div class="col-auto mb-3">
-                                <div class="avatar avatar-40 text-theme rounded">
-                                    <mat-icon class="material-icons-outlined">dashboard</mat-icon>
-                                </div>
-                            </div>
-                            <div class="col mb-3">
-                                <h3 class="mb-1">Workspaces</h3>
-                                <p class="text-secondary small">All visible workspaces grid list view</p>
-                            </div>
-                        </div>
-                    </div>
-                </mat-card-header>
-
-                <table mat-table [dataSource]="dataSource" matSort class="bg-none mb-3 responsive-table">
-                    <ng-container matColumnDef="name">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Workspace</th>
-                        <td mat-cell *matCellDef="let item" class="py-2">
-                            <p class="mat-mobile-label">Workspace</p>
-                            <h4 class="mb-0">{{ item.name }}</h4>
-                            <p class="text-secondary small mb-0">{{ item.slug }}</p>
-                        </td>
-                    </ng-container>
-
-                    <ng-container matColumnDef="organization">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Organization</th>
-                        <td mat-cell *matCellDef="let item" class="py-2">
-                            <p class="mat-mobile-label">Organization</p>
-                            {{ item.organizationName }}
-                        </td>
-                    </ng-container>
-
-                    <ng-container matColumnDef="owner">
-                        <th mat-header-cell *matHeaderCellDef>Owner</th>
-                        <td mat-cell *matCellDef="let item" class="py-2">
-                            <p class="mat-mobile-label">Owner</p>
-                            <span class="badge" [ngClass]="item.ownerId === currentUserId() ? 'theme-green' : 'theme-orange'">{{ item.ownerId === currentUserId() ? 'You' : 'User #' + item.ownerId }}</span>
-                        </td>
-                    </ng-container>
-
-                    <ng-container matColumnDef="createdAt">
-                        <th mat-header-cell *matHeaderCellDef mat-sort-header>Created</th>
-                        <td mat-cell *matCellDef="let item" class="py-2">
-                            <p class="mat-mobile-label">Created</p>
-                            {{ item.createdAt }}
-                        </td>
-                    </ng-container>
-
-                    <ng-container matColumnDef="actions">
-                        <th mat-header-cell *matHeaderCellDef>Actions</th>
-                        <td mat-cell *matCellDef="let item" class="py-2">
-                            <button matIconButton [matMenuTriggerFor]="workspaceActionMenu" aria-label="Actions" (click)="selectWorkspaceForAction(item.id); $event.stopPropagation()">
-                                <mat-icon class="material-icons-outlined">more_vert</mat-icon>
-                            </button>
-                        </td>
-                    </ng-container>
-
-                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                    <tr mat-row *matRowDef="let row; columns: displayedColumns" style="cursor: pointer" (click)="openWorkspaceDetails(row.id)"></tr>
-                </table>
-
-                <mat-card-content>
-                    <mat-paginator [pageSizeOptions]="[5, 10, 25, 100]" aria-label="Select page"></mat-paginator>
-                </mat-card-content>
-            </mat-card>
+            }
         </div>
-
-        <mat-menu #workspaceActionMenu="matMenu">
-            <button mat-menu-item (click)="openSelectedWorkspaceDetails()">
-                <mat-icon class="material-icons-outlined">open_in_new</mat-icon>
-                <span>View details</span>
-            </button>
-            <button mat-menu-item (click)="openCreateWorkspaceDialog()">
-                <mat-icon class="material-icons-outlined">edit</mat-icon>
-                <span>Edit (placeholder)</span>
-            </button>
-            <button mat-menu-item (click)="showDeletePlaceholder()">
-                <mat-icon class="material-icons-outlined">delete</mat-icon>
-                <span>Delete (placeholder)</span>
-            </button>
-        </mat-menu>
     `,
 })
 export class M2WorkspacesComponent implements OnInit {
     private readonly workspaceService = inject(M2WorkspaceService);
     private readonly authService = inject(AuthService);
+    private readonly router = inject(Router);
     private readonly dialog = inject(MatDialog);
     private readonly snackBar = inject(MatSnackBar);
-    private readonly router = inject(Router);
 
-    @ViewChild(MatPaginator) paginator!: MatPaginator;
-    @ViewChild(MatSort) sort!: MatSort;
-
-    readonly displayedColumns: string[] = ["name", "organization", "owner", "createdAt", "actions"];
-    readonly dataSource = new MatTableDataSource<M2WorkspaceView>([]);
+    readonly permissionService = inject(WorkspacePermissionService);
 
     readonly isLoading = signal(false);
-    readonly filterOn = signal(true);
-    readonly viewMode = signal<ViewMode>("week");
-    readonly workspaceRows = signal<M2WorkspaceView[]>([]);
-    readonly searchQuery = signal("");
-    readonly sortColumn = signal<SortColumn>("name");
-    readonly sortDirection = signal<SortDirection>("asc");
-    readonly selectedCategory = signal<Category>("All");
-    readonly selectedWorkspaceId = signal<string | null>(null);
     readonly lastError = signal<string | null>(null);
+    readonly searchTerm = signal("");
+    readonly workspaces = signal<WorkspaceViewRow[]>([]);
     readonly organizationOptions = signal<OrganizationOption[]>([]);
 
-    readonly currentUserId = computed(() => this.authService.currentUser()?.id ?? null);
-    readonly currentUserRole = computed(() => (this.authService.currentUser()?.role || "").toUpperCase());
-    readonly organizationName = computed(() => this.authService.currentOrganization()?.organizationName || "Unknown");
-    readonly currentOrganizationId = computed(() => this.authService.currentOrganization()?.organizationId || null);
-    readonly organizationMembershipRole = computed(() => (this.authService.currentOrganization()?.membershipRole || "UNKNOWN").toUpperCase());
-    readonly isGlobalAdmin = computed(() => this.currentUserRole() === "SUPER_ADMIN" || this.currentUserRole() === "ADMIN");
-    readonly canCreateWorkspace = computed(() => {
-        const userRole = this.currentUserRole();
-        return userRole === "SUPER_ADMIN" || userRole === "ADMIN" || userRole === "MANAGER" || userRole === "TUTOR";
+    readonly displayedColumns = ["name", "organization", "default", "createdAt", "actions"];
+
+    readonly filteredWorkspaces = computed(() => {
+        const query = this.searchTerm().trim().toLowerCase();
+        if (!query) {
+            return this.workspaces();
+        }
+
+        return this.workspaces().filter((w) =>
+            w.name.toLowerCase().includes(query) ||
+            w.slug.toLowerCase().includes(query) ||
+            w.organizationName.toLowerCase().includes(query)
+        );
     });
-
-    readonly filteredItems = computed(() => {
-        const query = this.searchQuery().trim().toLowerCase();
-        const category = this.selectedCategory();
-        const sortColumn = this.sortColumn();
-        const sortDirection = this.sortDirection();
-        const currentUserId = this.currentUserId();
-
-        const filtered = this.workspaceRows().filter((workspace) => {
-            const matchesSearch =
-                workspace.name.toLowerCase().includes(query) ||
-                workspace.slug.toLowerCase().includes(query) ||
-                workspace.organizationName.toLowerCase().includes(query);
-
-            if (!matchesSearch) {
-                return false;
-            }
-
-            if (category === "Owned") {
-                return workspace.ownerId === currentUserId;
-            }
-            if (category === "Other") {
-                return workspace.ownerId !== currentUserId;
-            }
-            return true;
-        });
-
-        const sorted = [...filtered].sort((a, b) => {
-            let valueA = "";
-            let valueB = "";
-
-            switch (sortColumn) {
-                case "name":
-                    valueA = a.name;
-                    valueB = b.name;
-                    break;
-                case "slug":
-                    valueA = a.slug;
-                    valueB = b.slug;
-                    break;
-                case "organization":
-                    valueA = a.organizationName;
-                    valueB = b.organizationName;
-                    break;
-                case "createdAt":
-                    valueA = a.createdAt;
-                    valueB = b.createdAt;
-                    break;
-            }
-
-            return sortDirection === "asc" ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
-        });
-
-        return sorted;
-    });
-
-    readonly ownedCount = computed(() => this.workspaceRows().filter((row) => row.ownerId === this.currentUserId()).length);
-    readonly otherCount = computed(() => this.workspaceRows().filter((row) => row.ownerId !== this.currentUserId()).length);
-    readonly organizationCount = computed(() => new Set(this.workspaceRows().map((row) => row.organizationName)).size);
-
-    constructor() {
-        effect(() => {
-            this.dataSource.data = this.filteredItems();
-            if (this.paginator) {
-                this.dataSource.paginator = this.paginator;
-            }
-            if (this.sort) {
-                this.dataSource.sort = this.sort;
-            }
-        });
-    }
 
     ngOnInit(): void {
-        this.loadOrganizationOptionsForCreate();
+        this.loadOrganizationOptions();
         this.loadWorkspaces();
     }
 
-    ngAfterViewInit(): void {
-        this.dataSource.paginator = this.paginator;
-        this.dataSource.sort = this.sort;
-        this.dataSource.sortingDataAccessor = (item: M2WorkspaceView, property: string): string | number => {
-            switch (property) {
-                case "name":
-                    return item.name;
-                case "organization":
-                    return item.organizationName;
-                case "createdAt":
-                    return item.createdAt;
-                default:
-                    return "";
-            }
-        };
+    loadWorkspaces(): void {
+        this.isLoading.set(true);
+        this.lastError.set(null);
+
+        this.workspaceService.getWorkspaces().subscribe({
+            next: (rows) => {
+                this.workspaces.set(rows.map((row) => this.toViewRow(row)));
+                this.isLoading.set(false);
+            },
+            error: (error: HttpErrorResponse) => {
+                this.workspaces.set([]);
+                this.isLoading.set(false);
+                this.lastError.set(this.errorMessage(error));
+            },
+        });
     }
 
-    toggleFilter(): void {
-        this.filterOn.set(!this.filterOn());
+    canOpenWorkspace(workspace: WorkspaceViewRow): boolean {
+        return this.permissionService.canOpenWorkspaceFromList(workspace.id);
     }
 
-    toggleSortDirection(): void {
-        this.sortDirection.set(this.sortDirection() === "asc" ? "desc" : "asc");
+    openWorkspaceDetails(workspace: WorkspaceViewRow, event?: Event): void {
+        event?.stopPropagation();
+        if (!this.canOpenWorkspace(workspace)) {
+            return;
+        }
+        this.router.navigate(["/app/workspaces", workspace.id]);
     }
 
     openCreateWorkspaceDialog(): void {
-        if (!this.canCreateWorkspace()) {
-            this.snackBar.open("You do not have permission to create workspaces for your role.", "Close", { duration: 5000 });
+        if (!this.permissionService.canCreateWorkspace()) {
+            this.snackBar.open("You do not have permission to create workspaces.", "Close", { duration: 4000 });
             return;
         }
 
-        if (this.isGlobalAdmin() && this.organizationOptions().length === 0) {
-            this.snackBar.open("No organizations available for selection.", "Close", { duration: 5000 });
-            return;
-        }
+        const isGlobalAdmin = this.permissionService.isGlobalAdmin();
+        const defaultOrgId = this.authService.currentOrganization()?.organizationId || null;
+        const defaultOrgName = this.authService.currentOrganization()?.organizationName || null;
 
         const ref = this.dialog.open(M2CreateWorkspaceDialogComponent, {
             width: "520px",
             maxWidth: "95vw",
-            panelClass: "custom-dialog-container",
             autoFocus: false,
             data: {
-                canSelectOrganization: this.isGlobalAdmin(),
+                canSelectOrganization: isGlobalAdmin,
                 organizationOptions: this.organizationOptions(),
-                defaultOrganizationId: this.currentOrganizationId(),
-                defaultOrganizationName: this.organizationName(),
+                defaultOrganizationId: defaultOrgId,
+                defaultOrganizationName: defaultOrgName,
             } as M2CreateWorkspaceDialogData,
         });
 
@@ -586,150 +372,54 @@ export class M2WorkspacesComponent implements OnInit {
 
             const payload: M2CreateWorkspaceRequest = {
                 ...result,
-                organizationId: this.isGlobalAdmin()
-                    ? result.organizationId
-                    : this.currentOrganizationId() || undefined,
+                organizationId: isGlobalAdmin ? result.organizationId : defaultOrgId || undefined,
             };
 
-            if (this.isGlobalAdmin() && !payload.organizationId) {
-                this.snackBar.open("Select an organization before creating a workspace.", "Close", { duration: 5000 });
+            if (isGlobalAdmin && !payload.organizationId) {
+                this.snackBar.open("Select an organization before creating a workspace.", "Close", { duration: 4000 });
                 return;
             }
 
-            console.log("[M2Workspaces] createWorkspace payload fields", payload);
-
             this.workspaceService.createWorkspace(payload).subscribe({
                 next: () => {
-                    console.log("[M2Workspaces] createWorkspace success", payload);
                     this.snackBar.open("Workspace created successfully", "Close", { duration: 3000 });
                     this.loadWorkspaces();
                 },
                 error: (error: HttpErrorResponse) => {
-                    const detail = this.getApiErrorDetail(error);
-                    if (error.status === 403) {
-                        this.snackBar.open("Workspace creation is forbidden for your current role.", "Close", { duration: 5000 });
-                    } else {
-                        this.snackBar.open(`Failed to create workspace (${detail})`, "Close", { duration: 5000 });
-                    }
-                    console.error("[M2Workspaces] createWorkspace failed", {
-                        status: error.status,
-                        url: error.url,
-                        error: error.error,
-                        organization: this.organizationName(),
-                        orgRole: this.organizationMembershipRole(),
-                    });
+                    this.snackBar.open(`Failed to create workspace (${this.errorMessage(error)})`, "Close", { duration: 5000 });
                 },
             });
         });
     }
 
-    private loadOrganizationOptionsForCreate(): void {
+    isDefaultWorkspace(workspace: WorkspaceViewRow): boolean {
+        const slug = workspace.slug.toLowerCase();
+        const name = workspace.name.toLowerCase();
+        return slug === "default-team" || slug === "default-course" || name === "default team" || name === "default course";
+    }
+
+    private loadOrganizationOptions(): void {
         this.authService.fetchOrganizationOptions().subscribe({
-            next: (rows) => {
-                this.organizationOptions.set(rows);
-                console.log("[M2Workspaces] organization options raw", rows);
-                rows.forEach((row, index) => {
-                    console.log(`[M2Workspaces] organization option[${index}] fields`, {
-                        organizationId: row.organizationId,
-                        organizationName: row.organizationName,
-                        organizationSlug: row.organizationSlug,
-                        organizationType: row.organizationType,
-                        membershipRole: row.membershipRole,
-                    });
-                });
-            },
-            error: (error: HttpErrorResponse) => {
-                console.error("[M2Workspaces] loadOrganizationOptionsForCreate failed", {
-                    status: error.status,
-                    url: error.url,
-                    error: error.error,
-                });
-            },
+            next: (rows) => this.organizationOptions.set(rows),
+            error: () => this.organizationOptions.set([]),
         });
     }
 
-    showCreateProjectPlaceholder(): void {
-        this.snackBar.open("Create Project integration comes in the next step.", "Close", { duration: 3000 });
-    }
-
-    showDeletePlaceholder(): void {
-        this.snackBar.open("Delete workspace flow is not part of this step.", "Close", { duration: 3000 });
-    }
-
-    openWorkspaceDetails(workspaceId: string): void {
-        this.router.navigate(["/app/workspace-details", workspaceId]);
-    }
-
-    selectWorkspaceForAction(workspaceId: string): void {
-        this.selectedWorkspaceId.set(workspaceId);
-    }
-
-    openSelectedWorkspaceDetails(): void {
-        const workspaceId = this.selectedWorkspaceId();
-        if (!workspaceId) {
-            this.snackBar.open("Select a workspace first", "Close", { duration: 2500 });
-            return;
-        }
-        this.openWorkspaceDetails(workspaceId);
-    }
-
-    private loadWorkspaces(): void {
-        this.isLoading.set(true);
-        this.lastError.set(null);
-        this.workspaceService.getWorkspaces().subscribe({
-            next: (rows: M2Workspace[]) => {
-                console.log("[M2Workspaces] getWorkspaces raw response", rows);
-                rows.forEach((row, index) => {
-                    console.log(`[M2Workspaces] workspace row[${index}] fields`, {
-                        id: row.id,
-                        name: row.name,
-                        slug: row.slug,
-                        ownerId: row.ownerId,
-                        createdAt: row.createdAt,
-                        organizationId: row.organization?.id,
-                        organizationName: row.organization?.name,
-                        organizationSlug: row.organization?.slug,
-                    });
-                });
-
-                this.workspaceRows.set(rows.map((workspace) => this.mapWorkspaceRow(workspace)));
-                this.isLoading.set(false);
-            },
-            error: (error: HttpErrorResponse) => {
-                this.workspaceRows.set([]);
-                this.isLoading.set(false);
-
-                const detail = this.getApiErrorDetail(error);
-
-                console.error("[M2Workspaces] loadWorkspaces failed", {
-                    status: error.status,
-                    url: error.url,
-                    error: error.error,
-                    organization: this.organizationName(),
-                });
-
-                this.lastError.set(detail);
-                this.snackBar.open(`Failed to load workspaces (${detail})`, "Close", { duration: 6000 });
-            },
-        });
-    }
-
-    private getApiErrorDetail(error: HttpErrorResponse): string {
-        const apiMessage = (error?.error && (error.error.message || error.error.error)) || error.message || "Request failed";
-        return `status=${error.status || 0} message=${apiMessage}`;
-    }
-
-    private mapWorkspaceRow(workspace: M2Workspace): M2WorkspaceView {
+    private toViewRow(workspace: M2Workspace): WorkspaceViewRow {
         const createdAt = workspace.createdAt ? new Date(workspace.createdAt) : null;
-        const row = {
+        return {
             id: workspace.id,
             name: workspace.name,
             slug: workspace.slug,
             ownerId: workspace.ownerId,
-            organizationName: workspace.organization?.name || "Organization",
             createdAt: createdAt ? createdAt.toLocaleDateString() : "-",
+            organizationName: workspace.organization?.name || "Organization",
+            orgType: (workspace.orgType || workspace.organization?.orgType || "ENTERPRISE").toUpperCase(),
         };
-        console.log("[M2Workspaces] mapped workspace view row", row);
-        return row;
+    }
+
+    private errorMessage(error: HttpErrorResponse): string {
+        const message = (error?.error && (error.error.message || error.error.error)) || error.message || "Request failed";
+        return `status=${error.status || 0} message=${message}`;
     }
 }
