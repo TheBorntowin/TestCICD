@@ -10,6 +10,7 @@ import com.example.pi_projet.repository.OrganizationMemberRepository;
 import com.example.pi_projet.repository.OrganizationRepository;
 import com.example.pi_projet.repository.WorkspaceMemberRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -189,13 +190,40 @@ public class M2OrganizationProvisioningService {
             return;
         }
 
-        workspaceMemberRepository.save(WorkspaceMember.builder()
-            .workspace(workspace)
-            .userId(userId)
-            .role(WorkspaceMember.WorkspaceRole.OWNER)
-            .invitedByUser(inviter)
-            .joinedAt(Instant.now())
-            .build());
+        Long inviterId = inviter != null ? inviter.getId() : null;
+        if (workspaceMemberRepository.restoreSoftDeletedMember(
+            workspace.getId(),
+            userId,
+            WorkspaceMember.WorkspaceRole.OWNER.name(),
+            null,
+            inviterId
+        ) > 0) {
+            return;
+        }
+
+        try {
+            workspaceMemberRepository.save(WorkspaceMember.builder()
+                .workspace(workspace)
+                .userId(userId)
+                .role(WorkspaceMember.WorkspaceRole.OWNER)
+                .invitedByUser(inviter)
+                .joinedAt(Instant.now())
+                .build());
+        } catch (DataIntegrityViolationException ex) {
+            if (workspaceMemberRepository.existsByWorkspaceIdAndUserId(workspace.getId(), userId)) {
+                return;
+            }
+            if (workspaceMemberRepository.restoreSoftDeletedMember(
+                workspace.getId(),
+                userId,
+                WorkspaceMember.WorkspaceRole.OWNER.name(),
+                null,
+                inviterId
+            ) > 0) {
+                return;
+            }
+            throw ex;
+        }
     }
 
     private Organization.OrgType parseOrgType(String orgTypeValue) {

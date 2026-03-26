@@ -14,9 +14,13 @@ import { catchError, take } from "rxjs/operators";
 import { AuthService } from "../../../auth/auth.service";
 import { CircleProgressBlueComponent } from "../../../components/charts/circle-progress-blue.component";
 import { InviteMemberModalComponent } from "./invite-member-modal.component";
+import { MemberRoleEditDialogComponent, MemberRoleEditDialogResult } from "./member-role-edit-dialog.component";
+import { MemberUnassignDialogComponent, MemberUnassignDialogResult } from "./member-unassign-dialog.component";
 import { WorkspaceMember, WorkspaceMemberCapacity } from "./models/workspace-member.model";
 import { M2ProjectSummary, M2Workspace, M2WorkspaceService } from "./m2-workspace.service";
 import { WorkspaceMemberService } from "./services/workspace-member.service";
+import { WorkspaceDeleteConfirmDialogComponent, WorkspaceDeleteConfirmDialogResult } from "./workspace-delete-confirm-dialog.component";
+import { WorkspaceEditDialogComponent, WorkspaceEditDialogResult } from "./workspace-edit-dialog.component";
 import { WorkspaceMemberCardComponent } from "./workspace-member-card.component";
 import { WorkspacePermissionService } from "./workspace-permission.service";
 
@@ -62,8 +66,8 @@ interface WorkspaceActivity {
                     <div class="col-auto order-2 order-lg-5 mb-3 mb-xl-0">
                         <button matButton (click)="backToWorkspaces()"><mat-icon class="material-icons-outlined">arrow_back</mat-icon> Back</button>
                         <button matButton class="ms-1" (click)="refresh()"><mat-icon class="material-icons-outlined">refresh</mat-icon> Refresh</button>
-                        @if (canManageWorkspace()) {
-                        <button matButton="filled" class="ms-1" (click)="showPlaceholder('Edit Workspace')"><mat-icon class="material-icons-outlined">edit</mat-icon> Edit</button>
+                        @if (canEditWorkspace()) {
+                        <button matButton="filled" class="ms-1" (click)="openEditWorkspaceDialog()"><mat-icon class="material-icons-outlined">edit</mat-icon> Edit</button>
                         }
                     </div>
                 </div>
@@ -335,7 +339,13 @@ interface WorkspaceActivity {
                                 <p class="text-secondary mb-0">No members found for this workspace.</p>
                                 } @else {
                                 @for (member of members(); track member.userId) {
-                                <app-workspace-member-card [member]="member" [orgType]="normalizedOrgType()"></app-workspace-member-card>
+                                <app-workspace-member-card
+                                    [member]="member"
+                                    [orgType]="normalizedOrgType()"
+                                    [canEditRole]="canEditMemberRoles()"
+                                    [canRemoveMember]="canInviteMember()"
+                                    (removeMember)="openMemberUnassignDialog($event)"
+                                    (editRole)="openMemberRoleEditDialog($event)"></app-workspace-member-card>
                                 }
                                 }
                             </div>
@@ -400,7 +410,7 @@ interface WorkspaceActivity {
                                 }
 
                                 <div class="d-flex flex-wrap gap-2">
-                                    <button matButton="filled" [disabled]="!canManageWorkspace()" (click)="showPlaceholder('Rename Workspace')">
+                                    <button matButton="filled" [disabled]="!canEditWorkspace()" (click)="openEditWorkspaceDialog()">
                                         <mat-icon class="material-icons-outlined">edit</mat-icon>
                                         Rename
                                     </button>
@@ -408,7 +418,7 @@ interface WorkspaceActivity {
                                         <mat-icon class="material-icons-outlined">hub</mat-icon>
                                         Integrations
                                     </button>
-                                    <button matButton="filled" [disabled]="!canManageWorkspace()" (click)="showPlaceholder('Delete Workspace')">
+                                    <button matButton="filled" [disabled]="!canEditWorkspace()" (click)="openDeleteWorkspaceDialog()">
                                         <mat-icon class="material-icons-outlined">delete</mat-icon>
                                         Delete Workspace
                                     </button>
@@ -550,16 +560,46 @@ export class M2WorkspaceDetailsComponent implements OnInit {
         return `User #${this.workspace()?.ownerId || "-"}`;
     });
 
-    readonly canManageWorkspace = computed(() => {
-        const userId = this.authService.currentUser()?.id;
-        if (userId && this.workspace()?.ownerId === userId) {
+    readonly isSameOrganizationAsWorkspace = computed(() => {
+        const currentOrgId = (this.authService.currentOrganization()?.organizationId || "").toLowerCase();
+        const workspaceOrgId = (this.workspace()?.organization?.id || "").toLowerCase();
+        return !!currentOrgId && !!workspaceOrgId && currentOrgId === workspaceOrgId;
+    });
+
+    readonly isCurrentUserGlobalAdmin = computed(() => {
+        const role = this.currentUserPlatformRole();
+        return role === "ADMIN" || role === "SUPER_ADMIN";
+    });
+
+    readonly isCurrentUserOrgAdmin = computed(() => {
+        const membershipRole = (this.authService.currentOrganization()?.membershipRole || "").toUpperCase();
+        return membershipRole === "ADMIN" || membershipRole === "OWNER";
+    });
+
+    readonly isCurrentUserAcademicTutor = computed(() => {
+        return this.currentUserPlatformRole() === "TUTOR" && this.normalizedOrgType() === "academic";
+    });
+
+    readonly isCurrentUserManager = computed(() => {
+        return this.currentUserPlatformRole() === "MANAGER";
+    });
+
+    readonly canEditWorkspace = computed(() => {
+        if (this.isCurrentUserGlobalAdmin()) {
             return true;
         }
-        return this.permissionService.canManageWorkspace(this.members());
+        if (!this.isSameOrganizationAsWorkspace()) {
+            return false;
+        }
+        return this.isCurrentUserOrgAdmin() || this.isCurrentUserAcademicTutor();
+    });
+
+    readonly canManageWorkspace = computed(() => {
+        return this.canEditWorkspace();
     });
 
     readonly currentUserOrgRole = computed(() => {
-        return this.normalizeOrgRole(this.authService.currentOrganization()?.membershipRole || "");
+        return (this.authService.currentOrganization()?.membershipRole || "").toUpperCase();
     });
 
     readonly currentUserPlatformRole = computed(() => {
@@ -584,14 +624,21 @@ export class M2WorkspaceDetailsComponent implements OnInit {
     });
 
     readonly canInviteMember = computed(() => {
-        const platformRole = this.currentUserPlatformRole();
-        if (platformRole === "ADMIN" || platformRole === "SUPER_ADMIN") {
+        if (this.isCurrentUserGlobalAdmin()) {
             return true;
         }
+        if (!this.isSameOrganizationAsWorkspace()) {
+            return false;
+        }
 
-        const currentOrgId = (this.authService.currentOrganization()?.organizationId || "").toLowerCase();
-        const workspaceOrgId = (this.workspace()?.organization?.id || "").toLowerCase();
-        return !!currentOrgId && !!workspaceOrgId && currentOrgId === workspaceOrgId;
+        return this.isCurrentUserOrgAdmin() || this.isCurrentUserAcademicTutor() || this.isCurrentUserManager();
+    });
+
+    readonly canEditMemberRoles = computed(() => {
+        if (this.isCurrentUserGlobalAdmin()) {
+            return true;
+        }
+        return this.isSameOrganizationAsWorkspace() && (this.isCurrentUserOrgAdmin() || this.isCurrentUserAcademicTutor());
     });
 
     readonly createdDateLabel = computed(() => {
@@ -691,6 +738,163 @@ export class M2WorkspaceDetailsComponent implements OnInit {
         }
     }
 
+    openEditWorkspaceDialog(): void {
+        const workspace = this.workspace();
+        if (!workspace || !this.canEditWorkspace()) {
+            return;
+        }
+
+        const ref = this.dialog.open(WorkspaceEditDialogComponent, {
+            width: "540px",
+            maxWidth: "95vw",
+            data: {
+                name: workspace.name,
+                slug: workspace.slug,
+            },
+        });
+
+        ref.afterClosed().subscribe((result?: WorkspaceEditDialogResult) => {
+            if (!result) {
+                return;
+            }
+
+            this.workspaceService.updateWorkspace(workspace.id, {
+                name: result.name,
+                slug: result.slug,
+            }).subscribe({
+                next: (updated) => {
+                    this.workspace.set(updated);
+                    this.snackBar.open("Workspace updated successfully.", "Close", { duration: 3000 });
+                },
+                error: (error: HttpErrorResponse) => {
+                    this.snackBar.open(`Failed to update workspace: ${this.errorMessage(error)}`, "Close", { duration: 4500 });
+                },
+            });
+        });
+    }
+
+    openDeleteWorkspaceDialog(): void {
+        const workspace = this.workspace();
+        if (!workspace || !this.canEditWorkspace()) {
+            return;
+        }
+
+        const ref = this.dialog.open(WorkspaceDeleteConfirmDialogComponent, {
+            width: "540px",
+            maxWidth: "95vw",
+            data: {
+                workspaceName: workspace.name,
+            },
+        });
+
+        ref.afterClosed().subscribe((result?: WorkspaceDeleteConfirmDialogResult) => {
+            if (!result?.confirmName) {
+                return;
+            }
+
+            this.workspaceService.deleteWorkspace(workspace.id, result.confirmName).subscribe({
+                next: () => {
+                    const deletedWorkspaceId = workspace.id;
+                    this.router.navigate(["/app/workspaces"]);
+
+                    const snackRef = this.snackBar.open("Workspace deleted.", "Undo", { duration: 7000 });
+                    snackRef.onAction().pipe(take(1)).subscribe(() => {
+                        this.workspaceService.restoreWorkspace(deletedWorkspaceId).subscribe({
+                            next: () => {
+                                this.snackBar.open("Workspace restored.", "Close", { duration: 3500 });
+                                this.router.navigate(["/app/workspaces", deletedWorkspaceId]);
+                            },
+                            error: (restoreError: HttpErrorResponse) => {
+                                this.snackBar.open(`Undo failed: ${this.errorMessage(restoreError)}`, "Close", { duration: 4500 });
+                            },
+                        });
+                    });
+                },
+                error: (error: HttpErrorResponse) => {
+                    this.snackBar.open(`Failed to delete workspace: ${this.errorMessage(error)}`, "Close", { duration: 5000 });
+                },
+            });
+        });
+    }
+
+    openMemberRoleEditDialog(member: WorkspaceMember): void {
+        if (!this.canEditMemberRoles()) {
+            return;
+        }
+
+        const workspaceId = this.route.snapshot.paramMap.get("workspaceId");
+        if (!workspaceId) {
+            return;
+        }
+
+        const ref = this.dialog.open(MemberRoleEditDialogComponent, {
+            width: "520px",
+            maxWidth: "95vw",
+            data: {
+                memberName: member.fullName,
+                orgType: this.normalizedOrgType(),
+                currentRole: member.workspaceRole,
+            },
+        });
+
+        ref.afterClosed().subscribe((result?: MemberRoleEditDialogResult) => {
+            if (!result?.role) {
+                return;
+            }
+            if ((result.role || "").toUpperCase() === (member.workspaceRole || "").toUpperCase()) {
+                return;
+            }
+
+            this.workspaceMemberService.updateMemberRole(workspaceId, member.userId, result.role).subscribe({
+                next: () => {
+                    this.snackBar.open("Member role updated.", "Close", { duration: 3000 });
+                    this.loadMembers(workspaceId);
+                },
+                error: (error: HttpErrorResponse) => {
+                    this.snackBar.open(`Failed to update member role: ${this.errorMessage(error)}`, "Close", { duration: 4500 });
+                },
+            });
+        });
+    }
+
+    openMemberUnassignDialog(member: WorkspaceMember): void {
+        if (!this.canInviteMember()) {
+            return;
+        }
+
+        const workspace = this.workspace();
+        const workspaceId = this.route.snapshot.paramMap.get("workspaceId");
+        if (!workspace || !workspaceId) {
+            return;
+        }
+
+        const ref = this.dialog.open(MemberUnassignDialogComponent, {
+            width: "520px",
+            maxWidth: "95vw",
+            data: {
+                memberName: member.fullName,
+                memberEmail: member.email,
+                workspaceName: workspace.name,
+            },
+        });
+
+        ref.afterClosed().subscribe((result?: MemberUnassignDialogResult) => {
+            if (!result?.confirm) {
+                return;
+            }
+
+            this.workspaceMemberService.removeMember(workspaceId, member.userId).subscribe({
+                next: () => {
+                    this.snackBar.open("Member unassigned from workspace.", "Close", { duration: 3200 });
+                    this.loadMembers(workspaceId);
+                },
+                error: (error: HttpErrorResponse) => {
+                    this.snackBar.open(`Failed to unassign member: ${this.errorMessage(error)}`, "Close", { duration: 4500 });
+                },
+            });
+        });
+    }
+
     backToWorkspaces(): void {
         this.router.navigate(["/app/workspaces"]);
     }
@@ -779,20 +983,6 @@ export class M2WorkspaceDetailsComponent implements OnInit {
         }
         const diff = Date.now() - ts;
         return diff >= 0 && diff <= days * 24 * 60 * 60 * 1000;
-    }
-
-    private normalizeOrgRole(raw: string): string {
-        const value = (raw || "").trim().toLowerCase();
-        if (value === "admin" || value === "owner") {
-            return "org_admin";
-        }
-        if (value === "academicadmin" || value === "academic_admin") {
-            return "academic_admin";
-        }
-        if (value === "professor" || value === "tutor") {
-            return "professor";
-        }
-        return value;
     }
 
     private errorMessage(error: HttpErrorResponse): string {

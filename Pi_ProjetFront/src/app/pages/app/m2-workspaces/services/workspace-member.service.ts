@@ -50,6 +50,16 @@ export class WorkspaceMemberService {
         );
     }
 
+    updateMemberRole(workspaceId: string, userId: number, role: string): Observable<WorkspaceMember> {
+        return this.http.patch<RawWorkspaceMember>(`${this.base}/${workspaceId}/members/${userId}/role`, { role }).pipe(
+            map((row) => this.toWorkspaceMember(row))
+        );
+    }
+
+    removeMember(workspaceId: string, userId: number): Observable<void> {
+        return this.http.delete<void>(`${this.base}/${workspaceId}/members/${userId}`);
+    }
+
     private toWorkspaceMember(row: RawWorkspaceMember): WorkspaceMember {
         return {
             userId: row.userId,

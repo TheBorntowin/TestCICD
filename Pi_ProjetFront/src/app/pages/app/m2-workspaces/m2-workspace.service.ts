@@ -59,6 +59,11 @@ export interface M2CreateWorkspaceRequest {
     ipAddress?: string;
 }
 
+export interface M2UpdateWorkspaceRequest {
+    name: string;
+    slug?: string;
+}
+
 @Injectable({ providedIn: "root" })
 export class M2WorkspaceService {
     private http = inject(HttpClient);
@@ -70,6 +75,18 @@ export class M2WorkspaceService {
 
     createWorkspace(body: M2CreateWorkspaceRequest): Observable<M2Workspace> {
         return this.http.post<M2Workspace>(this.base, body);
+    }
+
+    updateWorkspace(workspaceId: string, body: M2UpdateWorkspaceRequest): Observable<M2Workspace> {
+        return this.http.put<M2Workspace>(`${this.base}/${workspaceId}`, body);
+    }
+
+    deleteWorkspace(workspaceId: string, confirmName: string): Observable<void> {
+        return this.http.delete<void>(`${this.base}/${workspaceId}`, { body: { confirmName } });
+    }
+
+    restoreWorkspace(workspaceId: string): Observable<M2Workspace> {
+        return this.http.post<M2Workspace>(`${this.base}/${workspaceId}/restore`, {});
     }
 
     getWorkspaceById(workspaceId: string): Observable<M2Workspace> {
@@ -86,6 +103,14 @@ export class M2WorkspaceService {
 
     addWorkspaceMember(workspaceId: string, userId: number, role: string): Observable<M2WorkspaceMember> {
         return this.http.post<M2WorkspaceMember>(`${this.base}/${workspaceId}/members`, { userId, role });
+    }
+
+    updateWorkspaceMemberRole(workspaceId: string, userId: number, role: string): Observable<M2WorkspaceMember> {
+        return this.http.patch<M2WorkspaceMember>(`${this.base}/${workspaceId}/members/${userId}/role`, { role });
+    }
+
+    removeWorkspaceMember(workspaceId: string, userId: number): Observable<void> {
+        return this.http.delete<void>(`${this.base}/${workspaceId}/members/${userId}`);
     }
 
     getWorkspaceProjects(workspaceId: string, page = 0, size = 20): Observable<M2ProjectPage> {

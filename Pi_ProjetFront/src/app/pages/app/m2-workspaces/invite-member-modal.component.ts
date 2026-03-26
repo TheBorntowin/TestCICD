@@ -8,6 +8,8 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
 import { MatSnackBar } from "@angular/material/snack-bar";
+import { forkJoin, of } from "rxjs";
+import { catchError, map } from "rxjs/operators";
 import { AvailableOrgMember, WorkspaceMember } from "./models/workspace-member.model";
 import { WorkspaceMemberService } from "./services/workspace-member.service";
 
@@ -46,6 +48,27 @@ interface InviteMemberModalData {
             }
 
             <div class="invite-toolbar mb-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <button
+                        matIconButton
+                        class="mode-toggle"
+                        [class.active]="isMultiSelectMode()"
+                        (click)="toggleMultiSelectMode()"
+                        title="Toggle multi-select mode">
+                        <mat-icon class="material-icons-outlined">{{ isMultiSelectMode() ? "checklist" : "person_add" }}</mat-icon>
+                    </button>
+
+                    <p class="small mb-0 flex-grow-1 text-secondary">
+                        @if (isMultiSelectMode()) {Multi-select mode enabled. Hover rows to reveal quick-pick icons.}
+                        @else {Single-select mode. Click the icon to switch to bulk invites.}
+                    </p>
+
+                    @if (isMultiSelectMode() && filteredMembers().length > 0) {
+                    <button matButton type="button" (click)="selectAllFiltered()">Select visible</button>
+                    <button matButton type="button" (click)="clearSelection()">Clear</button>
+                    }
+                </div>
+
                 <mat-form-field appearance="outline" class="w-100 mb-0">
                 <mat-label>Search organization members</mat-label>
                 <mat-icon matPrefix>search</mat-icon>
@@ -75,7 +98,12 @@ interface InviteMemberModalData {
                             <p class="small text-secondary mb-0">Showing</p>
                             <p class="mb-0 fw-semibold">{{ filteredMembers().length }} members</p>
                         </div>
-                        <mat-icon class="material-icons-outlined text-theme">groups</mat-icon>
+                        <div class="d-flex align-items-center gap-2">
+                            @if (selectedCount() > 0) {
+                            <span class="selected-pill">{{ selectedCount() }} selected</span>
+                            }
+                            <mat-icon class="material-icons-outlined text-theme">groups</mat-icon>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -101,8 +129,9 @@ interface InviteMemberModalData {
                 <button
                     type="button"
                     class="member-row d-flex align-items-center"
-                    [class.selected]="selectedUserId() === member.userId"
-                    (click)="selectedUserId.set(member.userId)">
+                    [class.selected]="isSelected(member.userId)"
+                    [class.multi-mode]="isMultiSelectMode()"
+                    (click)="toggleMemberSelection(member.userId)">
                     <span class="avatar avatar-40 rounded-circle align-middle me-2 bg-light-theme d-flex align-items-center justify-content-center">
                         @if (member.avatarUrl) {
                         <img class="w-100 h-100 rounded-circle" [src]="member.avatarUrl" [alt]="member.fullName" />
@@ -116,9 +145,9 @@ interface InviteMemberModalData {
                     </span>
                     <span class="d-flex align-items-center gap-2">
                         <span class="badge badge-light">{{ orgRoleLabel(member.orgRole) }}</span>
-                        @if (selectedUserId() === member.userId) {
-                        <mat-icon class="material-icons-outlined text-theme">check_circle</mat-icon>
-                        }
+                        <span class="row-actions" [class.visible]="isSelected(member.userId)">
+                            <mat-icon class="material-icons-outlined action-icon">{{ isSelected(member.userId) ? "check_circle" : "add_circle" }}</mat-icon>
+                        </span>
                     </span>
                 </button>
                 }
@@ -128,8 +157,8 @@ interface InviteMemberModalData {
 
         <mat-dialog-actions align="end">
             <button matButton (click)="close()">Cancel</button>
-            <button matButton="filled" [disabled]="!selectedUserId() || isSubmitting()" (click)="invite()">
-                @if (isSubmitting()) {Inviting...} @else {Invite}
+            <button matButton="filled" [disabled]="selectedCount() === 0 || isSubmitting()" (click)="invite()">
+                @if (isSubmitting()) {Inviting...} @else {Invite {{ selectedCount() }} {{ selectedCount() === 1 ? "Member" : "Members" }}}
             </button>
         </mat-dialog-actions>
     `,
@@ -146,6 +175,30 @@ interface InviteMemberModalData {
                 border-radius: 12px;
                 border: 1px solid rgba(0, 136, 255, 0.2);
                 background: rgba(0, 136, 255, 0.06);
+            }
+
+            .mode-toggle {
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                border: 1px solid rgba(0, 0, 0, 0.12);
+                background: #fff;
+            }
+
+            .mode-toggle.active {
+                border-color: rgba(0, 136, 255, 0.45);
+                background: rgba(0, 136, 255, 0.08);
+            }
+
+            .selected-pill {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                padding: 4px 10px;
+                font-size: 12px;
+                border: 1px solid rgba(0, 136, 255, 0.24);
+                background: rgba(0, 136, 255, 0.1);
+                color: #0367bb;
             }
 
             .member-list {
@@ -177,6 +230,41 @@ interface InviteMemberModalData {
                 background: rgba(0, 136, 255, 0.04);
             }
 
+            .member-row.multi-mode.selected {
+                border-color: #00a86b;
+                box-shadow: 0 0 0 2px rgba(0, 168, 107, 0.12);
+                background: rgba(0, 168, 107, 0.05);
+            }
+
+            .row-actions {
+                width: 24px;
+                height: 24px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transform: translateX(6px);
+                transition: all 0.2s ease;
+            }
+
+            .member-row:hover .row-actions,
+            .row-actions.visible {
+                opacity: 1;
+                transform: translateX(0);
+            }
+
+            .action-icon {
+                color: rgba(0, 0, 0, 0.45);
+            }
+
+            .member-row.selected .action-icon {
+                color: #0088ff;
+            }
+
+            .member-row.multi-mode.selected .action-icon {
+                color: #00a86b;
+            }
+
             .empty-state {
                 display: flex;
                 gap: 8px;
@@ -204,7 +292,8 @@ export class InviteMemberModalComponent implements OnInit {
 
     readonly isLoading = signal(false);
     readonly isSubmitting = signal(false);
-    readonly selectedUserId = signal<number | null>(null);
+    readonly isMultiSelectMode = signal(false);
+    readonly selectedUserIds = signal<number[]>([]);
     readonly availableMembers = signal<AvailableOrgMember[]>([]);
     readonly errorMessage = signal<string | null>(null);
     readonly searchTerm = signal("");
@@ -220,6 +309,8 @@ export class InviteMemberModalComponent implements OnInit {
             m.fullName.toLowerCase().includes(query) || m.email.toLowerCase().includes(query)
         );
     });
+
+    readonly selectedCount = computed(() => this.selectedUserIds().length);
 
     readonly roleOptions = computed(() => {
         const base = this.normalizedOrgType() === "academic"
@@ -249,27 +340,99 @@ export class InviteMemberModalComponent implements OnInit {
     }
 
     invite(): void {
-        const selectedId = this.selectedUserId();
-        if (!selectedId || !this.workspaceId) {
+        const selectedIds = this.selectedUserIds();
+        if (!selectedIds.length || !this.workspaceId) {
             return;
         }
 
         this.isSubmitting.set(true);
         this.errorMessage.set(null);
 
-        this.workspaceMemberService.addMember(this.workspaceId, selectedId, this.selectedRole).subscribe({
-            next: (member) => {
-                this.memberAdded.emit(member);
-                this.snackBar.open("Member added successfully", "Close", { duration: 3000 });
-                this.dialogRef.close(member);
+        const requests = selectedIds.map((userId) =>
+            this.workspaceMemberService.addMember(this.workspaceId, userId, this.selectedRole).pipe(
+                map((member) => ({ userId, member, error: null as string | null })),
+                catchError((error) => of({ userId, member: null as WorkspaceMember | null, error: this.resolveHttpError(error) }))
+            )
+        );
+
+        forkJoin(requests).subscribe({
+            next: (results) => {
+                const successful = results.filter((result) => result.member !== null);
+                const failed = results.filter((result) => result.member === null);
+
+                successful.forEach((result) => {
+                    if (result.member) {
+                        this.memberAdded.emit(result.member);
+                    }
+                });
+
+                if (successful.length > 0) {
+                    const successfulIds = new Set(successful.map((result) => result.userId));
+                    this.availableMembers.update((rows) => rows.filter((row) => !successfulIds.has(row.userId)));
+                }
+
+                if (failed.length === 0) {
+                    const label = successful.length === 1 ? "1 member invited" : `${successful.length} members invited`;
+                    this.snackBar.open(`${label} successfully`, "Close", { duration: 3000 });
+                    this.dialogRef.close(successful[0]?.member || true);
+                    this.isSubmitting.set(false);
+                    return;
+                }
+
+                const failedIds = failed.map((result) => result.userId);
+                this.selectedUserIds.set(failedIds);
+
+                const firstError = failed[0].error || "Failed to add member";
+                const progress = `Invited ${successful.length}/${selectedIds.length}`;
+                this.errorMessage.set(`${progress}. ${firstError}`);
+
+                if (successful.length > 0) {
+                    this.snackBar.open(`${progress}. Fix remaining errors to continue.`, "Close", { duration: 4200 });
+                }
+
                 this.isSubmitting.set(false);
             },
             error: (error) => {
-                const message = error?.error?.message || error?.message || "Failed to add member";
-                this.errorMessage.set(message);
+                this.errorMessage.set(this.resolveHttpError(error));
                 this.isSubmitting.set(false);
             },
         });
+    }
+
+    toggleMultiSelectMode(): void {
+        const next = !this.isMultiSelectMode();
+        this.isMultiSelectMode.set(next);
+        if (!next) {
+            const first = this.selectedUserIds()[0];
+            this.selectedUserIds.set(first ? [first] : []);
+        }
+    }
+
+    toggleMemberSelection(userId: number): void {
+        if (!this.isMultiSelectMode()) {
+            this.selectedUserIds.set([userId]);
+            return;
+        }
+
+        const selected = this.selectedUserIds();
+        if (selected.includes(userId)) {
+            this.selectedUserIds.set(selected.filter((id) => id !== userId));
+            return;
+        }
+        this.selectedUserIds.set([...selected, userId]);
+    }
+
+    isSelected(userId: number): boolean {
+        return this.selectedUserIds().includes(userId);
+    }
+
+    selectAllFiltered(): void {
+        const visibleIds = this.filteredMembers().map((member) => member.userId);
+        this.selectedUserIds.set(Array.from(new Set(visibleIds)));
+    }
+
+    clearSelection(): void {
+        this.selectedUserIds.set([]);
     }
 
     close(): void {
@@ -301,32 +464,24 @@ export class InviteMemberModalComponent implements OnInit {
         return (this.orgType || "enterprise").toLowerCase();
     }
 
+    private resolveHttpError(error: any): string {
+        return error?.error?.message || error?.message || "Failed to add member";
+    }
+
     private defaultRole(): string {
         return this.normalizedOrgType() === "academic" ? "STUDENT" : "EMPLOYEE";
     }
 
     orgRoleLabel(role: string): string {
-        const normalized = (role || "").trim().toLowerCase();
-        if (normalized === "org_admin" || normalized === "admin") {
+        const normalized = (role || "").trim().toUpperCase();
+        if (normalized === "ADMIN") {
             return "Org Admin";
         }
-        if (normalized === "academic_admin" || normalized === "academicadmin") {
-            return "Academic Admin";
+        if (normalized === "OWNER") {
+            return "Owner";
         }
-        if (normalized === "professor" || normalized === "tutor") {
-            return "Professor";
-        }
-        if (normalized === "manager") {
-            return "Manager";
-        }
-        if (normalized === "employee") {
-            return "Employee";
-        }
-        if (normalized === "student") {
-            return "Student";
-        }
-        if (normalized === "viewer") {
-            return "Viewer";
+        if (normalized === "MEMBER") {
+            return "Member";
         }
         return role || "Member";
     }

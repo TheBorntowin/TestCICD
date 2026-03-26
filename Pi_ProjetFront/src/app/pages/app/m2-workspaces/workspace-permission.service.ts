@@ -14,14 +14,16 @@ export class WorkspacePermissionService {
 
     readonly userRole = computed(() => (this.authService.currentUser()?.role || "").toUpperCase());
     readonly organizationMembershipRole = computed(() => (this.authService.currentOrganization()?.membershipRole || "").toUpperCase());
+    readonly organizationType = computed(() => (this.authService.currentOrganization()?.organizationType || "").toUpperCase());
 
     readonly isGlobalAdmin = computed(() => this.userRole() === "SUPER_ADMIN" || this.userRole() === "ADMIN");
     readonly isOrgAdmin = computed(() => this.organizationMembershipRole() === "ADMIN" || this.organizationMembershipRole() === "OWNER");
     readonly isManager = computed(() => this.userRole() === "MANAGER");
     readonly isTutor = computed(() => this.userRole() === "TUTOR");
+    readonly isAcademicTutor = computed(() => this.isTutor() && this.organizationType() === "ACADEMIC");
 
     readonly canCreateWorkspace = computed(() => this.isGlobalAdmin() || this.isOrgAdmin() || this.isManager() || this.isTutor());
-    readonly canManageByRole = computed(() => this.isGlobalAdmin() || this.isOrgAdmin() || this.isManager() || this.isTutor());
+    readonly canManageByRole = computed(() => this.isGlobalAdmin() || this.isOrgAdmin() || this.isAcademicTutor());
 
     canOpenWorkspaceFromList(workspaceId: string | null | undefined): boolean {
         return !!workspaceId && !!this.authService.currentUser();

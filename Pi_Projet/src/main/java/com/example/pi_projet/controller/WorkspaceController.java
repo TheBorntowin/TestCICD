@@ -32,11 +32,7 @@ public class WorkspaceController {
     @GetMapping("/{id}")
     public Workspace getById(@PathVariable UUID id, HttpServletRequest request) {
         User currentUser = requireCurrentUser(request);
-        // enforce requester must be a workspace member
-        if (!workspaceService.isMember(id, currentUser.getId()) && !workspaceService.isGlobalAdmin(currentUser)) {
-            throw new com.example.pi_projet.exception.Module2Exception(com.example.pi_projet.exception.Module2Exception.ErrorCode.FORBIDDEN, "Requester is not a workspace member");
-        }
-        return workspaceService.getById(id);
+        return workspaceService.getByIdVisibleForUser(id, currentUser);
     }
 
     @PostMapping
@@ -57,14 +53,23 @@ public class WorkspaceController {
                             @RequestBody Map<String, String> body,
                             HttpServletRequest request) {
         User currentUser = requireCurrentUser(request);
-        return workspaceService.update(id, body.get("name"), currentUser.getId());
+        return workspaceService.update(id, body.get("name"), body.get("slug"), currentUser);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable UUID id, HttpServletRequest request) {
+    public void delete(@PathVariable UUID id,
+                       @RequestBody(required = false) Map<String, String> body,
+                       HttpServletRequest request) {
         User currentUser = requireCurrentUser(request);
-        workspaceService.delete(id, currentUser.getId());
+        String confirmName = body == null ? null : body.get("confirmName");
+        workspaceService.delete(id, currentUser, confirmName);
+    }
+
+    @PostMapping("/{id}/restore")
+    public Workspace restore(@PathVariable UUID id, HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
+        return workspaceService.restore(id, currentUser);
     }
 
     // ── Members ───────────────────────────────────────────────
@@ -114,8 +119,20 @@ public class WorkspaceController {
                                       @RequestBody Map<String, String> body,
                                       HttpServletRequest request) {
         User currentUser = requireCurrentUser(request);
+        String roleRaw = body.get("role");
+        if (roleRaw == null || roleRaw.isBlank()) {
+            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "role is required");
+        }
+
+        WorkspaceRole parsedRole;
+        try {
+            parsedRole = WorkspaceRole.valueOf(roleRaw.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Invalid role");
+        }
+
         return memberService.updateRole(id, userId,
-            WorkspaceRole.valueOf(body.get("role")),
+            parsedRole,
             currentUser.getId());
     }
 

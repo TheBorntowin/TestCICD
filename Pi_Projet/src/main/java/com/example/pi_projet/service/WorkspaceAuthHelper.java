@@ -20,18 +20,8 @@ public class WorkspaceAuthHelper {
                 "SELECT COUNT(*) FROM org_members WHERE organization_id = ? AND user_id = ? AND role IN ('ADMIN','OWNER') AND deleted_at IS NULL",
                 Integer.class, orgId.toString(), userId);
             return count != null && count > 0;
-        } catch (Exception e) {
-            try {
-                Integer legacyCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM org_members WHERE org_id = ? AND user_id = ? AND org_role IN ('org_admin','academic_admin') AND deleted_at IS NULL",
-                    Integer.class,
-                    orgId.toString(),
-                    userId
-                );
-                return legacyCount != null && legacyCount > 0;
-            } catch (Exception ignored) {
-                return false;
-            }
+        } catch (Exception ignored) {
+            return false;
         }
     }
 

@@ -10,6 +10,7 @@ import static com.example.pi_projet.exception.Module2Exception.ErrorCode.*;
 import com.example.pi_projet.repository.WorkspaceMemberRepository;
 import com.example.pi_projet.repository.OrganizationMemberRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +37,7 @@ public class WorkspaceMemberService {
     private final WorkspaceService workspaceService;
     private final com.example.pi_projet.repository.UserRepository userRepo;
     private final JdbcTemplate jdbcTemplate;
-    private final WorkspaceAuthHelper authHelper;
+    private final WorkspaceAuthorizationService authorizationService;
     private final WorkspaceQuotaHelper quotaHelper;
 
     private static final Set<WorkspaceRole> ENTERPRISE_VALID_INVITE_ROLES = Set.of(
@@ -55,10 +56,9 @@ public class WorkspaceMemberService {
 
     public List<WorkspaceMember> getAll(UUID workspaceId, Long requesterId) {
         Workspace workspace = workspaceService.getById(workspaceId);
-        UUID orgId = workspace.getOrganization().getId();
-        if (!workspaceService.isMember(workspaceId, requesterId)
-            && !authHelper.isOrgAdmin(orgId, requesterId)
-            && !isGlobalAdmin(requesterId)) {
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(FORBIDDEN, "Missing authenticated user context"));
+        if (!authorizationService.canViewWorkspaceMembers(requester, workspace)) {
             throw new Module2Exception(FORBIDDEN, "Only workspace members or org admins can view members");
         }
         return memberRepo.findAllByWorkspaceId(workspaceId);
@@ -75,10 +75,10 @@ public class WorkspaceMemberService {
     public Map<String, Object> getMemberCapacity(UUID workspaceId, Long requesterId) {
         Workspace workspace = workspaceService.getById(workspaceId);
         UUID orgId = workspace.getOrganization().getId();
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(FORBIDDEN, "Missing authenticated user context"));
 
-        if (!workspaceService.isMember(workspaceId, requesterId)
-            && !authHelper.isOrgAdmin(orgId, requesterId)
-            && !isGlobalAdmin(requesterId)) {
+        if (!authorizationService.canViewWorkspaceMembers(requester, workspace)) {
             throw new Module2Exception(FORBIDDEN, "Only workspace members or org admins can view member capacity");
         }
 
@@ -145,15 +145,28 @@ public class WorkspaceMemberService {
 
         User inviter = userRepo.findById(requesterId)
             .orElseThrow(() -> new Module2Exception(FORBIDDEN, "You don't have permission to invite members"));
+        Long roleId = resolveRoleId(requestedRole.name());
 
-        WorkspaceMember saved = memberRepo.save(WorkspaceMember.builder()
-            .workspace(workspace)
-            .userId(targetUserId)
-            .role(requestedRole)
-            .roleId(resolveRoleId(requestedRole.name()))
-            .invitedByUser(inviter)
-            .joinedAt(Instant.now())
-            .build());
+        if (restoreSoftDeletedMembership(workspaceId, targetUserId, requestedRole, roleId, requesterId)) {
+            WorkspaceMember restored = memberRepo.findByWorkspaceIdAndUserId(workspaceId, targetUserId)
+                .orElseThrow(() -> new Module2Exception(INTERNAL, "Failed to restore workspace membership"));
+            writeAuditInline(requesterId, orgId, restored.getId(), targetUserId, requestedRole);
+            return restored;
+        }
+
+        WorkspaceMember saved;
+        try {
+            saved = memberRepo.save(WorkspaceMember.builder()
+                .workspace(workspace)
+                .userId(targetUserId)
+                .role(requestedRole)
+                .roleId(roleId)
+                .invitedByUser(inviter)
+                .joinedAt(Instant.now())
+                .build());
+        } catch (DataIntegrityViolationException ex) {
+            throw new Module2Exception(CONFLICT, "User is already a member of this workspace");
+        }
 
         writeAuditInline(requesterId, orgId, saved.getId(), targetUserId, requestedRole);
         return saved;
@@ -162,9 +175,19 @@ public class WorkspaceMemberService {
     @Transactional
     public WorkspaceMember updateRole(UUID workspaceId, Long userId, WorkspaceRole newRole, Long requesterId) {
         Workspace workspace = workspaceService.getById(workspaceId);
-        UUID orgId = workspace.getOrganization().getId();
-        if (!authHelper.isWorkspaceOwnerOrAdmin(workspaceId, requesterId) && !authHelper.isOrgAdmin(orgId, requesterId)) {
-            throw new Module2Exception(FORBIDDEN, "Only org admin, workspace owner, or workspace admin can update member role.");
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(FORBIDDEN, "Missing authenticated user context"));
+
+        if (!authorizationService.canEditOrRemoveWorkspaceMember(requester, workspace)) {
+            throw new Module2Exception(FORBIDDEN, "Only org admin, global admin, or academic tutor can update member role.");
+        }
+
+        String orgType = resolveWorkspaceOrgType(workspace);
+        if (!isRoleValidForOrgType(orgType, newRole)) {
+            throw new Module2Exception(VALIDATION, "Invalid role for this organization type");
+        }
+        if (newRole == WorkspaceRole.ADMIN) {
+            throw new Module2Exception(FORBIDDEN, "Admin role cannot be assigned via role update");
         }
 
         WorkspaceMember m = memberRepo.findByWorkspaceIdAndUserId(workspaceId, userId)
@@ -177,9 +200,11 @@ public class WorkspaceMemberService {
     @Transactional
     public void remove(UUID workspaceId, Long userId, Long requesterId) {
         Workspace workspace = workspaceService.getById(workspaceId);
-        UUID orgId = workspace.getOrganization().getId();
-        if (!authHelper.isWorkspaceOwnerOrAdmin(workspaceId, requesterId) && !authHelper.isOrgAdmin(orgId, requesterId)) {
-            throw new Module2Exception(FORBIDDEN, "Only org admin, workspace owner, or workspace admin can remove members.");
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(FORBIDDEN, "Missing authenticated user context"));
+
+        if (!authorizationService.canInviteOrAddMember(requester, workspace)) {
+            throw new Module2Exception(FORBIDDEN, "Only org owner/admin, manager, or tutor can remove members in this organization.");
         }
 
         WorkspaceMember m = memberRepo.findByWorkspaceIdAndUserId(workspaceId, userId)
@@ -187,30 +212,13 @@ public class WorkspaceMemberService {
         memberRepo.delete(m);
     }
 
-    private boolean isGlobalAdmin(Long userId) {
-        return userRepo.findById(userId)
-            .map(User::getRole)
-            .map(role -> role == User.RoleName.SUPER_ADMIN || role == User.RoleName.ADMIN)
-            .orElse(false);
-    }
-
     private void enforceInvitePermission(Workspace workspace, Long requesterId) {
         User requester = userRepo.findById(requesterId)
             .orElseThrow(() -> new Module2Exception(FORBIDDEN, "You don't have permission to invite members"));
 
-        UUID orgId = workspace.getOrganization().getId();
-
-        // Global admins can manage invites across organizations.
-        if (requester.getRole() == User.RoleName.SUPER_ADMIN || requester.getRole() == User.RoleName.ADMIN) {
-            return;
+        if (!authorizationService.canInviteOrAddMember(requester, workspace)) {
+            throw new Module2Exception(FORBIDDEN, "Only org owner/admin, manager, or tutor can invite members in this organization");
         }
-
-        // Non super-admin inviters must belong to the workspace organization.
-        if (!isUserInOrganization(orgId, requesterId)) {
-            throw new Module2Exception(FORBIDDEN, "You can invite members only in your organization");
-        }
-
-        // Simple SRS rule requested: same-organization members can invite.
     }
 
     private List<Map<String, Object>> queryAvailableOrgMembers(UUID orgId, UUID workspaceId) {
@@ -278,6 +286,21 @@ public class WorkspaceMemberService {
             workspaceId.toString()
         );
         return count == null ? 0L : count;
+    }
+
+    private boolean restoreSoftDeletedMembership(UUID workspaceId,
+                                                 Long userId,
+                                                 WorkspaceRole role,
+                                                 Long roleId,
+                                                 Long inviterId) {
+        int updated = memberRepo.restoreSoftDeletedMember(
+            workspaceId,
+            userId,
+            role.name(),
+            roleId,
+            inviterId
+        );
+        return updated > 0;
     }
 
     private boolean isRoleValidForOrgType(String orgType, WorkspaceRole role) {

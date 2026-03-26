@@ -1,5 +1,6 @@
 import { CommonModule } from "@angular/common";
-import { Component, Input, computed } from "@angular/core";
+import { Component, EventEmitter, Input, Output, computed } from "@angular/core";
+import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
 import { MatIconModule } from "@angular/material/icon";
 import { WorkspaceMember } from "./models/workspace-member.model";
@@ -7,7 +8,7 @@ import { WorkspaceMember } from "./models/workspace-member.model";
 @Component({
     selector: "app-workspace-member-card",
     standalone: true,
-    imports: [CommonModule, MatCardModule, MatIconModule],
+    imports: [CommonModule, MatCardModule, MatIconModule, MatButtonModule],
     template: `
         <mat-card class="mb-2">
             <mat-card-content>
@@ -27,6 +28,20 @@ import { WorkspaceMember } from "./models/workspace-member.model";
                         <span class="badge badge-light" [ngClass]="roleBadgeClass()">{{ roleLabel() }}</span>
                         <p class="text-secondary small mb-0 mt-1">Joined {{ joinedAtLabel() }}</p>
                     </div>
+                    @if (canEditRole || canRemoveMember) {
+                    <div class="d-flex align-items-center ms-2 gap-1">
+                        @if (canEditRole) {
+                        <button matIconButton (click)="requestRoleEdit()" title="Edit member role">
+                            <mat-icon class="material-icons-outlined">edit</mat-icon>
+                        </button>
+                        }
+                        @if (canRemoveMember) {
+                        <button matIconButton class="theme-red" (click)="requestRemoveMember()" title="Unassign from workspace">
+                            <mat-icon class="material-icons-outlined">person_remove</mat-icon>
+                        </button>
+                        }
+                    </div>
+                    }
                 </div>
             </mat-card-content>
         </mat-card>
@@ -35,6 +50,11 @@ import { WorkspaceMember } from "./models/workspace-member.model";
 export class WorkspaceMemberCardComponent {
     @Input({ required: true }) member!: WorkspaceMember;
     @Input() orgType: string = "enterprise";
+    @Input() canEditRole = false;
+    @Input() canRemoveMember = false;
+
+    @Output() readonly editRole = new EventEmitter<WorkspaceMember>();
+    @Output() readonly removeMember = new EventEmitter<WorkspaceMember>();
 
     readonly normalizedOrgType = computed(() => (this.orgType || "enterprise").toLowerCase());
 
@@ -88,5 +108,13 @@ export class WorkspaceMemberCardComponent {
         }
         const parsed = new Date(this.member.joinedAt);
         return Number.isNaN(parsed.getTime()) ? "-" : parsed.toLocaleDateString();
+    }
+
+    requestRoleEdit(): void {
+        this.editRole.emit(this.member);
+    }
+
+    requestRemoveMember(): void {
+        this.removeMember.emit(this.member);
     }
 }

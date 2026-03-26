@@ -4,6 +4,7 @@ import com.example.pi_projet.entity.Workspace;
 import com.example.pi_projet.entity.WorkspaceMember;
 import com.example.pi_projet.entity.WorkspaceMember.WorkspaceRole;
 import com.example.pi_projet.entity.User;
+import com.example.pi_projet.entity.OrganizationMember;
 import com.example.pi_projet.exception.Module2Exception;
 import static com.example.pi_projet.exception.Module2Exception.ErrorCode.*;
 
@@ -19,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import lombok.extern.slf4j.Slf4j;
 import com.example.pi_projet.entity.Organization;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.util.StringUtils;
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
@@ -33,16 +35,11 @@ import java.util.UUID;
 @Slf4j
 public class WorkspaceService {
 
-    private static final String ORG_ROLE_ORG_ADMIN = "org_admin";
-    private static final String ORG_ROLE_ACADEMIC_ADMIN = "academic_admin";
-    private static final String ORG_ROLE_ADMIN = "admin";
-    private static final String ORG_ROLE_OWNER = "owner";
-
     private final WorkspaceRepository workspaceRepo;
     private final WorkspaceMemberRepository memberRepo;
     private final com.example.pi_projet.repository.UserRepository userRepo;
     private final JdbcTemplate jdbcTemplate;
-    private final WorkspaceAuthHelper authHelper;
+    private final WorkspaceAuthorizationService authorizationService;
     private final WorkspaceQuotaHelper quotaHelper;
     private final M2AuditLogService auditLogService;
 
@@ -55,12 +52,18 @@ public class WorkspaceService {
         }
 
         Long userId = currentUser.getId();
-        if (isGlobalAdminRole(currentUser.getRole())) {
+        if (authorizationService.isGlobalAdmin(currentUser)) {
             return workspaceRepo.findAll();
         }
 
-        OrgMembershipContext membership = resolveSingleOrganizationMembership(userId);
-        return workspaceRepo.findAllByMemberUserIdAndOrganizationId(userId, membership.orgId());
+        OrganizationMember membership = authorizationService.requireSingleOrganizationMembership(userId);
+        UUID orgId = membership.getOrganization().getId();
+
+        if (authorizationService.canViewAllWorkspacesInOrganization(currentUser, membership)) {
+            return workspaceRepo.findAllByOrganizationId(orgId);
+        }
+
+        return workspaceRepo.findAllByMemberUserIdAndOrganizationId(userId, orgId);
     }
 
     public Workspace getById(UUID id) {
@@ -101,15 +104,10 @@ public class WorkspaceService {
             throw new Module2Exception(FORBIDDEN, "Workspace limit reached for your plan");
         }
 
-        if (!isGlobalAdminRole(currentUser.getRole())) {
-            OrgMembershipContext membership = resolveSingleOrganizationMembership(currentUser.getId());
-            if (requestedOrgId != null && !requestedOrgId.equals(membership.orgId())) {
-                throw new Module2Exception(FORBIDDEN, "You can create workspaces only inside your organization");
-            }
-            boolean hasOrganizationCreateRole = canCreateWorkspaceByOrgRole(membership.orgRole());
-            boolean tutorInAcademicOrg = isTutorInAcademicOrganization(currentUser, orgType);
-            if (!hasOrganizationCreateRole && !tutorInAcademicOrg) {
-                throw new Module2Exception(FORBIDDEN, "Only org admin, owner, or academic tutor can create workspaces.");
+        if (!authorizationService.isGlobalAdmin(currentUser)) {
+            OrganizationMember membership = authorizationService.requireOrganizationMembership(currentUser.getId(), orgId);
+            if (!authorizationService.canCreateWorkspace(currentUser, membership)) {
+                throw new Module2Exception(FORBIDDEN, "Only org owner/admin, manager, or tutor can create workspaces.");
             }
         }
 
@@ -134,7 +132,7 @@ public class WorkspaceService {
             .workspace(ws)
             .userId(currentUserId)
             .role(WorkspaceRole.OWNER)
-            .roleId(resolveRoleId("OWNER", "org_admin", "academic_admin", "professor"))
+            .roleId(resolveRoleId("OWNER", "ADMIN"))
             .invitedByUser(null)
             .joinedAt(Instant.now())
             .build();
@@ -145,26 +143,82 @@ public class WorkspaceService {
     }
 
     @Transactional
-    public Workspace update(UUID id, String name, Long requesterId) {
-        Workspace ws = getById(id);
-        // only workspace admin or org_admin can update
-        UUID orgId = ws.getOrganization().getId();
-        if (!authHelper.isWorkspaceAdminOrManager(id, requesterId) && !authHelper.isOrgAdmin(orgId, requesterId)) {
-            throw new Module2Exception(FORBIDDEN, "Only workspace admin or org_admin can update workspace");
+    public Workspace update(UUID id, String name, String slug, User requester) {
+        if (requester == null || requester.getId() == null) {
+            throw new Module2Exception(FORBIDDEN, "Missing authenticated user context");
         }
-        ws.setName(name);
-        return workspaceRepo.save(ws);
+
+        Workspace ws = getById(id);
+        assertCanManageWorkspaceLikeCreatePolicy(requester, ws);
+
+        String finalName = StringUtils.trimWhitespace(name);
+        if (!StringUtils.hasText(finalName)) {
+            throw new Module2Exception(VALIDATION, "Workspace name is required");
+        }
+        ws.setName(finalName);
+
+        if (slug != null) {
+            String normalizedSlug = normalizeSlug(slug);
+            if (!StringUtils.hasText(normalizedSlug)) {
+                throw new Module2Exception(VALIDATION, "Workspace slug is required");
+            }
+            UUID orgId = ws.getOrganization().getId();
+            if (!normalizedSlug.equalsIgnoreCase(ws.getSlug())
+                && workspaceRepo.existsBySlugAndOrganizationId(normalizedSlug, orgId)) {
+                throw new Module2Exception(CONFLICT, "Workspace slug already exists for this organization");
+            }
+            ws.setSlug(normalizedSlug);
+        }
+
+        Workspace saved = workspaceRepo.save(ws);
+        writeAuditLog(requester.getId(), ws.getOrganization().getId(), "UPDATE_WORKSPACE", "workspace", ws.getId().toString(), null);
+        return saved;
     }
 
     @Transactional
-    public void delete(UUID id, Long requesterId) {
-        Workspace ws = getById(id);
-        UUID orgId = ws.getOrganization().getId();
-        if (!authHelper.isOrgAdmin(orgId, requesterId)) {
-            throw new Module2Exception(FORBIDDEN, "Only org_admin can delete workspace");
+    public void delete(UUID id, User requester, String confirmName) {
+        if (requester == null || requester.getId() == null) {
+            throw new Module2Exception(FORBIDDEN, "Missing authenticated user context");
         }
-        // soft-delete
+
+        Workspace ws = getById(id);
+        String expectedName = ws.getName() == null ? "" : ws.getName().trim();
+        String providedName = confirmName == null ? "" : confirmName.trim();
+        if (!StringUtils.hasText(providedName) || !expectedName.equals(providedName)) {
+            throw new Module2Exception(VALIDATION, "Confirmation name does not match workspace name");
+        }
+
+        assertCanManageWorkspaceLikeCreatePolicy(requester, ws);
         workspaceRepo.delete(ws);
+        writeAuditLog(requester.getId(), ws.getOrganization().getId(), "DELETE_WORKSPACE", "workspace", ws.getId().toString(), null);
+    }
+
+    @Transactional
+    public Workspace restore(UUID id, User requester) {
+        if (requester == null || requester.getId() == null) {
+            throw new Module2Exception(FORBIDDEN, "Missing authenticated user context");
+        }
+
+        Workspace ws = workspaceRepo.findAnyByIdNative(id)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Workspace not found: " + id));
+
+        assertCanManageWorkspaceLikeCreatePolicy(requester, ws);
+
+        int updated = workspaceRepo.restoreSoftDeletedById(id);
+        if (updated <= 0) {
+            throw new Module2Exception(INTERNAL, "Unable to restore workspace");
+        }
+
+        writeAuditLog(requester.getId(), ws.getOrganization().getId(), "RESTORE_WORKSPACE", "workspace", ws.getId().toString(), null);
+        return getById(id);
+    }
+
+    public Workspace getByIdVisibleForUser(UUID id, User requester) {
+        Workspace workspace = getById(id);
+        if (!authorizationService.canViewWorkspace(requester, workspace)) {
+            throw new Module2Exception(FORBIDDEN, "Requester is not allowed to view this workspace");
+        }
+        return workspace;
     }
 
     @Transactional
@@ -172,7 +226,8 @@ public class WorkspaceService {
         Workspace ws = getById(workspaceId);
         User targetUser = userRepo.findById(targetUserId)
             .orElseThrow(() -> new Module2Exception(NOT_FOUND, "User to invite not found"));
-        if (!userRepo.existsById(requesterId)) throw new Module2Exception(NOT_FOUND, "Requester user not found");
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Requester user not found"));
 
         // Target user must be member of the organization
         UUID orgId = ws.getOrganization().getId();
@@ -183,8 +238,8 @@ public class WorkspaceService {
         }
 
         try {
-            if (!authHelper.isWorkspaceOwnerOrAdmin(workspaceId, requesterId) && !authHelper.isOrgAdmin(orgId, requesterId)) {
-                throw new Module2Exception(FORBIDDEN, "Only org admin, workspace owner, or workspace admin can invite members.");
+            if (!authorizationService.canInviteOrAddMember(requester, ws)) {
+                throw new Module2Exception(FORBIDDEN, "Only org owner/admin, manager, or tutor can invite members.");
             }
 
             String targetOrgRole = resolveOrganizationRole(orgId, targetUserId);
@@ -201,13 +256,12 @@ public class WorkspaceService {
             String orgType = quotaHelper.getOrgTypeStub(orgId);
             WorkspaceRole finalRole = resolveWorkspaceRoleForInvite(orgType, targetUser.getRole(), requestedRole);
 
-            var inviter = userRepo.findById(requesterId).orElseThrow(() -> new Module2Exception(NOT_FOUND, "Requester user not found"));
             WorkspaceMember m = WorkspaceMember.builder()
                     .workspace(ws)
                     .userId(targetUserId)
                     .role(finalRole)
                     .roleId(resolveRoleId(finalRole.name(), targetOrgRole, targetUser.getRole() != null ? targetUser.getRole().name() : null))
-                    .invitedByUser(inviter)
+                    .invitedByUser(requester)
                     .joinedAt(Instant.now())
                     .build();
             var saved = memberRepo.save(m);
@@ -222,9 +276,10 @@ public class WorkspaceService {
     @Transactional
     public void removeMember(UUID workspaceId, Long userId, Long requesterId) {
         Workspace workspace = getById(workspaceId);
-        UUID orgId = workspace.getOrganization().getId();
-        if (!authHelper.isWorkspaceOwnerOrAdmin(workspaceId, requesterId) && !authHelper.isOrgAdmin(orgId, requesterId)) {
-            throw new Module2Exception(FORBIDDEN, "Only org admin, workspace owner, or workspace admin can remove members.");
+        User requester = userRepo.findById(requesterId)
+            .orElseThrow(() -> new Module2Exception(FORBIDDEN, "Missing authenticated user context"));
+        if (!authorizationService.canInviteOrAddMember(requester, workspace)) {
+            throw new Module2Exception(FORBIDDEN, "Only org owner/admin, manager, or tutor can remove members.");
         }
 
         WorkspaceMember m = memberRepo.findByWorkspaceIdAndUserId(workspaceId, userId)
@@ -251,116 +306,55 @@ public class WorkspaceService {
         }
     }
 
-    private OrgMembershipContext resolveSingleOrganizationMembership(Long userId) {
-        List<Map<String, Object>> rows = queryOrgMembershipRows(userId);
-
-        if (rows.isEmpty()) {
-            throw new Module2Exception(FORBIDDEN, "Authenticated user is not a member of any organization");
-        }
-        if (rows.size() > 1) {
-            throw new Module2Exception(FORBIDDEN, "Authenticated user belongs to multiple organizations, exactly one is required");
-        }
-
-        Map<String, Object> row = rows.get(0);
-        Object orgIdValue = row.get("org_id");
-        Object orgRoleValue = row.get("org_role");
-        if (orgIdValue == null || orgRoleValue == null) {
-            throw new Module2Exception(INTERNAL, "Organization membership row is incomplete");
-        }
-
-        UUID orgId = parseUuidValue(orgIdValue);
-        String orgRole = orgRoleValue.toString().toLowerCase(Locale.ROOT);
-        return new OrgMembershipContext(orgId, orgRole);
-    }
-
-    private List<Map<String, Object>> queryOrgMembershipRows(Long userId) {
-        try {
-            return jdbcTemplate.queryForList(
-                "SELECT organization_id AS org_id, role AS org_role FROM org_members WHERE user_id = ? AND deleted_at IS NULL",
-                userId
-            );
-        } catch (Exception primaryQueryFailure) {
-            return jdbcTemplate.queryForList(
-                "SELECT org_id, org_role FROM org_members WHERE user_id = ? AND deleted_at IS NULL",
-                userId
-            );
-        }
-    }
-
     private String resolveOrganizationRole(UUID orgId, Long userId) {
-        try {
-            return jdbcTemplate.queryForObject(
-                "SELECT role FROM org_members WHERE organization_id = ? AND user_id = ? AND deleted_at IS NULL",
-                String.class,
-                orgId.toString(),
-                userId
-            );
-        } catch (Exception primaryQueryFailure) {
-            return jdbcTemplate.queryForObject(
-                "SELECT org_role FROM org_members WHERE org_id = ? AND user_id = ? AND deleted_at IS NULL",
-                String.class,
-                orgId.toString(),
-                userId
-            );
+        return jdbcTemplate.queryForObject(
+            "SELECT role FROM org_members WHERE organization_id = ? AND user_id = ? AND deleted_at IS NULL",
+            String.class,
+            orgId.toString(),
+            userId
+        );
+    }
+
+    private String resolveWorkspaceOrgType(Workspace workspace) {
+        String raw = workspace.getOrgType();
+        if (!StringUtils.hasText(raw)
+            && workspace.getOrganization() != null
+            && workspace.getOrganization().getOrgType() != null) {
+            raw = workspace.getOrganization().getOrgType().name();
         }
+        return StringUtils.hasText(raw) ? raw.trim().toLowerCase(Locale.ROOT) : "enterprise";
     }
 
-    private boolean isOrganizationWideRole(String orgRole) {
-        if (orgRole == null) {
-            return false;
+    private void assertCanManageWorkspaceLikeCreatePolicy(User requester, Workspace workspace) {
+        if (!authorizationService.canManageWorkspace(requester, workspace)) {
+            throw new Module2Exception(FORBIDDEN, "Only org admin, owner, or academic tutor can manage this workspace");
         }
-        String normalized = orgRole.toLowerCase(Locale.ROOT);
-        return ORG_ROLE_ORG_ADMIN.equals(normalized)
-            || ORG_ROLE_ACADEMIC_ADMIN.equals(normalized)
-            || ORG_ROLE_ADMIN.equals(normalized)
-            || ORG_ROLE_OWNER.equals(normalized);
-    }
-
-    private boolean isGlobalAdminRole(User.RoleName role) {
-        return role == User.RoleName.SUPER_ADMIN || role == User.RoleName.ADMIN;
-    }
-
-    private boolean canCreateWorkspaceByOrgRole(String orgRole) {
-        if (orgRole == null) {
-            return false;
-        }
-        String normalized = orgRole.toLowerCase(Locale.ROOT);
-        return ORG_ROLE_ORG_ADMIN.equals(normalized)
-            || ORG_ROLE_ACADEMIC_ADMIN.equals(normalized)
-            || ORG_ROLE_OWNER.equals(normalized)
-            || ORG_ROLE_ADMIN.equals(normalized);
-    }
-
-    private boolean isTutorInAcademicOrganization(User currentUser, String orgType) {
-        return "academic".equalsIgnoreCase(orgType) && currentUser.getRole() == User.RoleName.TUTOR;
     }
 
     public boolean isGlobalAdmin(User currentUser) {
-        return currentUser != null && isGlobalAdminRole(currentUser.getRole());
+        return authorizationService.isGlobalAdmin(currentUser);
     }
 
     private UUID resolveTargetOrganizationIdForCreate(User currentUser, UUID requestedOrgId) {
-        User.RoleName role = currentUser.getRole();
-
-        if (isGlobalAdminRole(role)) {
+        if (authorizationService.isGlobalAdmin(currentUser)) {
             if (requestedOrgId != null) {
                 ensureOrganizationExists(requestedOrgId);
                 return requestedOrgId;
             }
 
             try {
-                return resolveSingleOrganizationMembership(currentUser.getId()).orgId();
+                return authorizationService.requireSingleOrganizationMembership(currentUser.getId()).getOrganization().getId();
             } catch (Module2Exception ex) {
                 return resolveAnyOrganizationIdForGlobalAdmin();
             }
         }
 
-        OrgMembershipContext membership = resolveSingleOrganizationMembership(currentUser.getId());
-        if (requestedOrgId != null) {
-            ensureOrganizationExists(requestedOrgId);
-            return requestedOrgId;
+        OrganizationMember membership = authorizationService.requireSingleOrganizationMembership(currentUser.getId());
+        UUID membershipOrgId = membership.getOrganization().getId();
+        if (requestedOrgId != null && !requestedOrgId.equals(membershipOrgId)) {
+            throw new Module2Exception(FORBIDDEN, "You can create workspaces only inside your organization");
         }
-        return membership.orgId();
+        return membershipOrgId;
     }
 
     @Transactional
@@ -396,16 +390,7 @@ public class WorkspaceService {
 
             Workspace saved = changed ? workspaceRepo.save(candidate) : candidate;
 
-            if (!memberRepo.existsByWorkspaceIdAndUserId(saved.getId(), ownerUserId)) {
-                WorkspaceMember ownerMember = WorkspaceMember.builder()
-                    .workspace(saved)
-                    .userId(ownerUserId)
-                    .role(WorkspaceRole.OWNER)
-                    .roleId(resolveRoleId("OWNER", "org_admin", "academic_admin", "professor"))
-                    .joinedAt(Instant.now())
-                    .build();
-                memberRepo.save(ownerMember);
-            }
+            ensureOwnerMembership(saved, ownerUserId);
 
             return saved;
         }
@@ -420,18 +405,69 @@ public class WorkspaceService {
         workspace.setOrganization(em.getReference(Organization.class, orgId));
         Workspace saved = workspaceRepo.save(workspace);
 
-        if (!memberRepo.existsByWorkspaceIdAndUserId(saved.getId(), ownerUserId)) {
-            WorkspaceMember ownerMember = WorkspaceMember.builder()
-                .workspace(saved)
-                .userId(ownerUserId)
-                .role(WorkspaceRole.OWNER)
-                .roleId(resolveRoleId("OWNER", "org_admin", "academic_admin", "professor"))
-                .joinedAt(Instant.now())
-                .build();
-            memberRepo.save(ownerMember);
-        }
+        ensureOwnerMembership(saved, ownerUserId);
 
         return saved;
+    }
+
+    private void ensureOwnerMembership(Workspace workspace, Long ownerUserId) {
+        var existing = memberRepo.findByWorkspaceIdAndUserId(workspace.getId(), ownerUserId);
+        if (existing.isPresent()) {
+            WorkspaceMember row = existing.get();
+            boolean changed = false;
+            if (row.getRole() != WorkspaceRole.OWNER) {
+                row.setRole(WorkspaceRole.OWNER);
+                changed = true;
+            }
+            Long ownerRoleId = resolveRoleId("OWNER", "ADMIN");
+            if (ownerRoleId != null && (row.getRoleId() == null || !ownerRoleId.equals(row.getRoleId()))) {
+                row.setRoleId(ownerRoleId);
+                changed = true;
+            }
+            if (row.getJoinedAt() == null) {
+                row.setJoinedAt(Instant.now());
+                changed = true;
+            }
+            if (changed) {
+                memberRepo.save(row);
+            }
+            return;
+        }
+
+        Long ownerRoleId = resolveRoleId("OWNER", "ADMIN");
+        if (memberRepo.restoreSoftDeletedMember(
+            workspace.getId(),
+            ownerUserId,
+            WorkspaceRole.OWNER.name(),
+            ownerRoleId,
+            null
+        ) > 0) {
+            return;
+        }
+
+        try {
+            memberRepo.save(WorkspaceMember.builder()
+                .workspace(workspace)
+                .userId(ownerUserId)
+                .role(WorkspaceRole.OWNER)
+                .roleId(ownerRoleId)
+                .joinedAt(Instant.now())
+                .build());
+        } catch (DataIntegrityViolationException ex) {
+            if (memberRepo.existsByWorkspaceIdAndUserId(workspace.getId(), ownerUserId)) {
+                return;
+            }
+            if (memberRepo.restoreSoftDeletedMember(
+                workspace.getId(),
+                ownerUserId,
+                WorkspaceRole.OWNER.name(),
+                ownerRoleId,
+                null
+            ) > 0) {
+                return;
+            }
+            throw ex;
+        }
     }
 
     private void ensureOrganizationExists(UUID orgId) {
@@ -557,5 +593,4 @@ public class WorkspaceService {
         return null;
     }
 
-    private record OrgMembershipContext(UUID orgId, String orgRole) {}
 }

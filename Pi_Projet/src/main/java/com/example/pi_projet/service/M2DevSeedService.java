@@ -16,6 +16,7 @@ import com.example.pi_projet.repository.UserRepository;
 import com.example.pi_projet.repository.WorkspaceMemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -221,15 +222,45 @@ public class M2DevSeedService {
             return;
         }
 
+        Long roleId = resolveRoleId(role.name(), roleNameCandidate);
+        Long inviterId = inviter != null ? inviter.getId() : null;
+
+        if (workspaceMemberRepository.restoreSoftDeletedMember(
+            workspace.getId(),
+            userId,
+            role.name(),
+            roleId,
+            inviterId
+        ) > 0) {
+            return;
+        }
+
         WorkspaceMember member = WorkspaceMember.builder()
             .workspace(workspace)
             .userId(userId)
             .role(role)
-            .roleId(resolveRoleId(role.name(), roleNameCandidate))
+            .roleId(roleId)
             .invitedByUser(inviter)
             .joinedAt(Instant.now())
             .build();
-        workspaceMemberRepository.save(member);
+
+        try {
+            workspaceMemberRepository.save(member);
+        } catch (DataIntegrityViolationException ex) {
+            if (workspaceMemberRepository.existsByWorkspaceIdAndUserId(workspace.getId(), userId)) {
+                return;
+            }
+            if (workspaceMemberRepository.restoreSoftDeletedMember(
+                workspace.getId(),
+                userId,
+                role.name(),
+                roleId,
+                inviterId
+            ) > 0) {
+                return;
+            }
+            throw ex;
+        }
     }
 
     private ProjectTemplate ensureTemplate(Organization org,
