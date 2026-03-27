@@ -4,6 +4,7 @@ import com.example.pi_projet.entity.User;
 import com.example.pi_projet.entity.Workspace;
 import com.example.pi_projet.entity.WorkspaceMember;
 import com.example.pi_projet.entity.WorkspaceMember.WorkspaceRole;
+import com.example.pi_projet.exception.M2ValidationUtils;
 import com.example.pi_projet.exception.Module2Exception;
 import com.example.pi_projet.service.WorkspaceMemberService;
 import com.example.pi_projet.service.WorkspaceService;
@@ -153,53 +154,23 @@ public class WorkspaceController {
     }
 
     private String parseRequiredWorkspaceName(String value) {
-        if (value == null || value.isBlank())
-            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Workspace name is required.");
-        String name = value.trim();
-        if (name.length() < 3)   throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Workspace name must be at least 3 characters.");
-        if (name.length() > 100) throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Workspace name cannot exceed 100 characters.");
-        return name;
+        return M2ValidationUtils.requireLength(value, 3, 100, "Workspace name");
     }
 
     private String parseOptionalSlug(String value) {
-        if (value == null || value.isBlank()) return null;
-        String slug = value.trim().toLowerCase();
-        if (!slug.matches("^[a-z0-9]+(?:-[a-z0-9]+)*$"))
-            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Slug must contain only lowercase letters, numbers, and single hyphens.");
-        if (slug.length() > 80)
-            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Slug cannot exceed 80 characters.");
-        return slug;
+        return M2ValidationUtils.validateSlug(value);
     }
 
     private UUID parseOptionalUuid(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
+        if (value == null || value.isBlank()) return null;
         try {
             return UUID.fromString(value);
         } catch (IllegalArgumentException ex) {
-            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Invalid organizationId UUID format");
+            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Invalid organizationId UUID format.");
         }
     }
 
     private Long parseRequiredUserId(Object value) {
-        if (value == null) {
-            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "userId is required");
-        }
-
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-
-        String raw = String.valueOf(value);
-        if (raw.isBlank()) {
-            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "userId is required");
-        }
-
-        try {
-            return Long.parseLong(raw.trim());
-        } catch (NumberFormatException ex) {
-            throw new Module2Exception(Module2Exception.ErrorCode.VALIDATION, "Invalid userId");
-        }
+        return M2ValidationUtils.requireLong(value, "userId");
     }
 }

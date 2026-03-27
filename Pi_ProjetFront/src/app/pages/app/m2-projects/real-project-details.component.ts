@@ -362,7 +362,7 @@ interface ProjectMemberView {
                                 <div class="col-6">
                                     <mat-form-field appearance="outline" class="w-100 mb-2">
                                         <mat-label>End Date</mat-label>
-                                        <input matInput type="date" name="editEndDate" [(ngModel)]="editEndDate" #endDateCtrl="ngModel" />
+                                        <input matInput type="date" name="editEndDate" [(ngModel)]="editEndDate" #endDateCtrl="ngModel" [min]="editStartDate || ''" />
                                         @if (editEndDate && editStartDate && editEndDate < editStartDate) {
                                         <mat-error>End date must be after the start date.</mat-error>
                                         }

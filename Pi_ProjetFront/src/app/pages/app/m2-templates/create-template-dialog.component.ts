@@ -307,12 +307,18 @@ const STARTERS: TemplateStarter[] = [
                     @for (phase of phases(); track $index; let i = $index) {
                         <div class="row-card d-flex align-items-center gap-2">
                             <div class="phase-badge">{{ i + 1 }}</div>
-                            <mat-form-field appearance="outline" class="flex-grow-1 mb-0" style="font-size:13px;">
+                            <div class="flex-grow-1">
+                            <mat-form-field appearance="outline" class="w-100 mb-0" style="font-size:13px;">
                                 <mat-label>Phase name</mat-label>
                                 <input matInput [value]="phase.name"
                                     (input)="updatePhaseName(i, $any($event.target).value)"
-                                    placeholder="e.g. Planning" />
+                                    placeholder="e.g. Planning"
+                                    [class.mat-form-field-invalid]="phaseNameErrors()[i]" />
+                                @if (phaseNameErrors()[i]) {
+                                    <mat-error>{{ phaseNameErrors()[i] }}</mat-error>
+                                }
                             </mat-form-field>
+                            </div>
                             <mat-form-field appearance="outline" style="width:100px;font-size:13px;flex-shrink:0;" class="mb-0">
                                 <mat-label>Days</mat-label>
                                 <input matInput type="number" [value]="phase.durationDays"
@@ -366,12 +372,17 @@ const STARTERS: TemplateStarter[] = [
                     @for (role of roles(); track $index; let i = $index) {
                         <div class="row-card d-flex align-items-center gap-2">
                             <mat-icon class="material-icons-outlined text-secondary flex-shrink-0" style="font-size:18px;width:18px;height:18px;">person</mat-icon>
-                            <mat-form-field appearance="outline" class="flex-grow-1 mb-0" style="font-size:13px;">
+                            <div class="flex-grow-1">
+                            <mat-form-field appearance="outline" class="w-100 mb-0" style="font-size:13px;">
                                 <mat-label>Role name</mat-label>
                                 <input matInput [value]="role.role"
                                     (input)="updateRoleName(i, $any($event.target).value)"
                                     placeholder="e.g. SCRUM_MASTER" />
+                                @if (roleNameErrors()[i]) {
+                                    <mat-error>{{ roleNameErrors()[i] }}</mat-error>
+                                }
                             </mat-form-field>
+                            </div>
                             <mat-form-field appearance="outline" style="width:80px;font-size:13px;flex-shrink:0;" class="mb-0">
                                 <mat-label>Count</mat-label>
                                 <input matInput type="number" [value]="role.count"
@@ -445,6 +456,12 @@ const STARTERS: TemplateStarter[] = [
                 }
                 <div class="summary-row"><span>Config JSON</span><strong>{{ defaultProjectConfigJson.trim() ? '✓ provided' : '—' }}</strong></div>
                 <p class="small text-secondary mt-3 mb-0">The template will be saved as <strong>DRAFT</strong>. You can publish it for review from the Templates Hub.</p>
+                @if (submitError) {
+                    <div class="d-flex align-items-start gap-2 mt-3 p-2 rounded" style="background:#fef2f2;border:1px solid #fecaca;">
+                        <mat-icon class="material-icons-outlined flex-shrink-0" style="color:#ef4444;font-size:18px;width:18px;height:18px;margin-top:1px;">error_outline</mat-icon>
+                        <span style="font-size:13px;color:#b91c1c;">{{ submitError }}</span>
+                    </div>
+                }
             }
         </mat-dialog-content>
 
@@ -506,6 +523,9 @@ export class CreateTemplateDialogComponent implements OnInit {
 
     readonly validRoles = computed(() => this.roles().filter(r => r.role.trim().length > 0));
     readonly totalPhaseDays = computed(() => this.phases().reduce((s, p) => s + (p.durationDays || 0), 0));
+    phaseNameErrors = signal<string[]>([]);
+    roleNameErrors = signal<string[]>([]);
+    submitError = "";
 
     // Computed: find the full starter object from pickedType
     pickedStarter(): TemplateStarter | undefined {
@@ -603,6 +623,16 @@ export class CreateTemplateDialogComponent implements OnInit {
             }
         }
         if (this.currentStep() === 2) {
+            // Validate phase names — each phase must have a non-empty name
+            const errors = this.phases().map(p => p.name.trim() ? "" : "Phase name is required.");
+            this.phaseNameErrors.set(errors);
+            if (errors.some(e => e)) return;
+
+            // Validate role names — each added role must have a non-empty name
+            const roleErrors = this.roles().map(r => r.role.trim() ? "" : "Role name is required.");
+            this.roleNameErrors.set(roleErrors);
+            if (roleErrors.some(e => e)) return;
+
             // Validate config JSON if provided
             this.configJsonError = "";
             const cfg = this.defaultProjectConfigJson.trim();
@@ -617,7 +647,10 @@ export class CreateTemplateDialogComponent implements OnInit {
     }
 
     prevStep(): void {
-        if (this.currentStep() > 0) this.currentStep.update(s => s - 1);
+        if (this.currentStep() > 0) {
+            this.currentStep.update(s => s - 1);
+            this.submitError = "";
+        }
     }
 
     // ── Phase management ──
@@ -626,9 +659,13 @@ export class CreateTemplateDialogComponent implements OnInit {
     }
     removePhase(index: number): void {
         this.phases.update(ps => ps.filter((_, i) => i !== index));
+        this.phaseNameErrors.update(errs => errs.filter((_, i) => i !== index));
     }
     updatePhaseName(index: number, name: string): void {
         this.phases.update(ps => ps.map((p, i) => i === index ? { ...p, name } : p));
+        if (name.trim()) {
+            this.phaseNameErrors.update(errs => errs.map((e, i) => i === index ? "" : e));
+        }
     }
     updatePhaseDuration(index: number, durationDays: number): void {
         this.phases.update(ps => ps.map((p, i) => i === index ? { ...p, durationDays: isNaN(durationDays) ? 0 : durationDays } : p));
@@ -640,9 +677,13 @@ export class CreateTemplateDialogComponent implements OnInit {
     }
     removeRole(index: number): void {
         this.roles.update(rs => rs.filter((_, i) => i !== index));
+        this.roleNameErrors.update(errs => errs.filter((_, i) => i !== index));
     }
     updateRoleName(index: number, role: string): void {
         this.roles.update(rs => rs.map((r, i) => i === index ? { ...r, role } : r));
+        if (role.trim()) {
+            this.roleNameErrors.update(errs => errs.map((e, i) => i === index ? "" : e));
+        }
     }
     updateRoleCount(index: number, count: number): void {
         this.roles.update(rs => rs.map((r, i) => i === index ? { ...r, count: isNaN(count) || count < 1 ? 1 : count } : r));
@@ -683,14 +724,15 @@ export class CreateTemplateDialogComponent implements OnInit {
             body["defaultRolesJson"] = JSON.stringify(vRoles);
         }
 
+        this.submitError = "";
         this.templateService.create(body).subscribe({
             next: () => {
                 this.snackBar.open("Template created as DRAFT.", "Close", { duration: 3500 });
                 this.dialogRef.close({ created: true } as CreateTemplateDialogResult);
             },
-            error: () => {
+            error: (err) => {
                 this.submitting.set(false);
-                this.snackBar.open("Failed to create template.", "Close", { duration: 4000 });
+                this.submitError = err?.error?.message || "Failed to create template. Please try again.";
             },
         });
     }

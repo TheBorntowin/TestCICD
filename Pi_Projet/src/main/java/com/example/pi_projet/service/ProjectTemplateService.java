@@ -1,6 +1,7 @@
 package com.example.pi_projet.service;
 
 import com.example.pi_projet.entity.ProjectTemplate;
+import com.example.pi_projet.exception.M2ValidationUtils;
 import com.example.pi_projet.exception.Module2Exception;
 import static com.example.pi_projet.exception.Module2Exception.ErrorCode.*;
 import com.example.pi_projet.repository.ProjectTemplateRepository;
@@ -26,9 +27,9 @@ public class ProjectTemplateService {
         return projectTemplateRepository.findById(id);
     }
     public ProjectTemplate createTemplate(ProjectTemplate template) {
-        if (template.getName() == null || template.getName().isBlank()) {
-            throw new Module2Exception(BAD_REQUEST, "Template name is required");
-        }
+        // Name is the only strictly required field — validated with min/max
+        M2ValidationUtils.requireTemplateName(template.getName());
+
         template.setVersion(template.getVersion() != null ? template.getVersion() : 1);
         template.setStatus(ProjectTemplate.TemplateStatus.DRAFT);
         template.setIsPublic(false);
@@ -41,20 +42,26 @@ public class ProjectTemplateService {
     }
 
     public ProjectTemplate update(UUID id, ProjectTemplate updated) {
+        // Validate name before touching the DB row
+        if (updated.getName() != null) {
+            M2ValidationUtils.requireTemplateName(updated.getName());
+        }
         return projectTemplateRepository.findById(id)
                 .map(existing -> {
-                    existing.setName(updated.getName());
-                    existing.setTemplateType(updated.getTemplateType());
-                    existing.setDefaultPhasesJson(updated.getDefaultPhasesJson());
-                    existing.setDefaultRolesJson(updated.getDefaultRolesJson());
-                    existing.setDefaultMilestonesJson(updated.getDefaultMilestonesJson());
-                    existing.setDefaultTasksJson(updated.getDefaultTasksJson());
-                    existing.setDefaultProjectConfigJson(updated.getDefaultProjectConfigJson());
-                    existing.setUseCaseDescription(updated.getUseCaseDescription());
-                    existing.setEstimatedEffort(updated.getEstimatedEffort());
-                    existing.setEstimatedDurationDays(updated.getEstimatedDurationDays());
-                    existing.setDifficultyLevel(updated.getDifficultyLevel());
-                    existing.setTags(updated.getTags());
+                    // Only overwrite fields that were explicitly provided (non-null in patch)
+                    if (updated.getName()                   != null) existing.setName(updated.getName().trim());
+                    if (updated.getTemplateType()           != null) existing.setTemplateType(updated.getTemplateType());
+                    if (updated.getDefaultPhasesJson()      != null) existing.setDefaultPhasesJson(updated.getDefaultPhasesJson());
+                    if (updated.getDefaultRolesJson()       != null) existing.setDefaultRolesJson(updated.getDefaultRolesJson());
+                    if (updated.getDefaultMilestonesJson()  != null) existing.setDefaultMilestonesJson(updated.getDefaultMilestonesJson());
+                    if (updated.getDefaultTasksJson()       != null) existing.setDefaultTasksJson(updated.getDefaultTasksJson());
+                    if (updated.getDefaultProjectConfigJson() != null) existing.setDefaultProjectConfigJson(updated.getDefaultProjectConfigJson());
+                    if (updated.getUseCaseDescription()     != null) existing.setUseCaseDescription(updated.getUseCaseDescription());
+                    if (updated.getEstimatedEffort()        != null) existing.setEstimatedEffort(updated.getEstimatedEffort());
+                    if (updated.getEstimatedDurationDays()  != null) existing.setEstimatedDurationDays(updated.getEstimatedDurationDays());
+                    if (updated.getDifficultyLevel()        != null) existing.setDifficultyLevel(updated.getDifficultyLevel());
+                    if (updated.getTags()                   != null) existing.setTags(updated.getTags());
+                    if (updated.getTeamStrategy()           != null) existing.setTeamStrategy(updated.getTeamStrategy());
                     return projectTemplateRepository.save(existing);
                 })
                 .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Template not found"));

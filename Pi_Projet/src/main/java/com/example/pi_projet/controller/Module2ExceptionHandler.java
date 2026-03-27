@@ -14,21 +14,73 @@ import java.util.Map;
 @Slf4j
 public class Module2ExceptionHandler {
 
+    /* ── Domain exception ─────────────────────────────────────── */
+
     @ExceptionHandler(Module2Exception.class)
     public ResponseEntity<Object> handleModule2(Module2Exception ex) {
-        log.error("Module2Exception code={} message={}", ex.getCode(), ex.getMessage(), ex);
+        log.warn("Module2Exception code={} message={}", ex.getCode(), ex.getMessage());
         HttpStatus status = switch (ex.getCode()) {
-            case NOT_FOUND -> HttpStatus.NOT_FOUND;
-            case CONFLICT -> HttpStatus.CONFLICT;
-            case FORBIDDEN -> HttpStatus.FORBIDDEN;
+            case NOT_FOUND       -> HttpStatus.NOT_FOUND;
+            case CONFLICT        -> HttpStatus.CONFLICT;
+            case FORBIDDEN       -> HttpStatus.FORBIDDEN;
             case PAYMENT_REQUIRED -> HttpStatus.valueOf(402);
             case BAD_REQUEST, VALIDATION -> HttpStatus.BAD_REQUEST;
-            default -> HttpStatus.INTERNAL_SERVER_ERROR;
+            default              -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
+        return errorResponse(status, ex.getCode().name(), ex.getMessage(), ex.getMetadata());
+    }
+
+    /* ── Runtime exceptions caused by bad request data ──────── */
+
+    /** Triggered by Long.parseLong / Integer.parseInt on bad input */
+    @ExceptionHandler(NumberFormatException.class)
+    public ResponseEntity<Object> handleNumberFormat(NumberFormatException ex) {
+        log.debug("NumberFormatException: {}", ex.getMessage());
+        return errorResponse(HttpStatus.BAD_REQUEST, "VALIDATION",
+            "Invalid numeric value: " + sanitize(ex.getMessage()), null);
+    }
+
+    /** Triggered by Enum.valueOf on unknown enum constant */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Object> handleIllegalArgument(IllegalArgumentException ex) {
+        log.debug("IllegalArgumentException: {}", ex.getMessage());
+        return errorResponse(HttpStatus.BAD_REQUEST, "VALIDATION",
+            "Invalid value: " + sanitize(ex.getMessage()), null);
+    }
+
+    /** Triggered by raw map casts or null dereferences on missing request fields */
+    @ExceptionHandler(NullPointerException.class)
+    public ResponseEntity<Object> handleNullPointer(NullPointerException ex) {
+        log.warn("NullPointerException in request processing", ex);
+        return errorResponse(HttpStatus.BAD_REQUEST, "VALIDATION",
+            "A required field is missing or null.", null);
+    }
+
+    /** Triggered by (int) body.get("field") when the value is not an Integer */
+    @ExceptionHandler(ClassCastException.class)
+    public ResponseEntity<Object> handleClassCast(ClassCastException ex) {
+        log.debug("ClassCastException: {}", ex.getMessage());
+        return errorResponse(HttpStatus.BAD_REQUEST, "VALIDATION",
+            "Invalid field type — check the request body.", null);
+    }
+
+    /* ── Helpers ──────────────────────────────────────────────── */
+
+    private ResponseEntity<Object> errorResponse(HttpStatus status, String code,
+                                                  String message, Map<String, Object> meta) {
         Map<String, Object> body = new HashMap<>();
-        body.put("code", ex.getCode().name());
-        body.put("message", ex.getMessage());
-        if (ex.getMetadata() != null) body.put("meta", ex.getMetadata());
+        body.put("code", code);
+        body.put("message", message);
+        if (meta != null) body.put("meta", meta);
         return new ResponseEntity<>(body, status);
+    }
+
+    /** Prevent leaking internal Java class names in error messages */
+    private String sanitize(String raw) {
+        if (raw == null) return "unknown";
+        // Strip "For input string: ..." prefix from NumberFormatException
+        int idx = raw.indexOf('"');
+        if (idx >= 0) return raw.substring(idx).replace("\"", "'");
+        return raw;
     }
 }
