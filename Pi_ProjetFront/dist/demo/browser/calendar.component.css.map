@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["angular:styles/component:css;1c05540ab9e4d35a5f92dffa145b7b71cca9389ba0db818617277de8fd1c9b39;C:/Users/msi/Downloads/billing-complete-v8/billing-project/Pi_ProjetFront/src/app/pages/app/applications/calendar/calendar.component.ts"],
+  "sourcesContent": ["\n            .doclist {\n                --mat-chip-container-height: 44px;\n                --mat-chip-with-avatar-avatar-size: 30px;\n                --mat-chip-with-icon-icon-size: 30px;\n            }\n        "],
+  "mappings": ";AACY,CAAC;AACG,+BAA6B;AAC7B,sCAAoC;AACpC,kCAAgC;AACpC;",
+  "names": []
+}

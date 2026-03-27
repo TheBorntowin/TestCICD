@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["angular:styles/component:css;362246d7943ee56b6a657e2a7ec97becda1d5aa7f514d53597b3c829fe9d1e69;C:/Users/msi/Downloads/billing-complete-v8/billing-project/Pi_ProjetFront/src/app/components/app-sidebar/app-sidebar.component.ts"],
+  "sourcesContent": ["\n        .unitum-sidebar-icon { display:flex; align-items:center; margin-right:8px; }\n        .unitum-sidebar-text { font-size:17px !important; font-weight:700 !important; letter-spacing:-0.3px; }\n    "],
+  "mappings": ";AACQ,CAAC;AAAsB,WAAQ;AAAM,eAAY;AAAQ,gBAAa;AAAK;AAC3E,CAAC;AAAsB,aAAU;AAAiB,eAAY;AAAgB,kBAAe;AAAQ;",
+  "names": []
+}

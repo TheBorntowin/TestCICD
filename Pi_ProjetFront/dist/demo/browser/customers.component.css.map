@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["angular:styles/component:css;3d1d77e296ed32bbcc4706a509d19ebde4ba1bf5f709e94855c3d2fc076a40e7;C:/Users/msi/Downloads/billing-complete-v8/billing-project/Pi_ProjetFront/src/app/pages/app/customers/customers.component.ts"],
+  "sourcesContent": ["\n            .mat-drawer-container {\n                position: unset !important;\n                mat-drawer {\n                    position: fixed;\n                    z-index: 20;\n                }\n            }\n        "],
+  "mappings": ";AACY,CAAC;AACG,YAAU;AAKd;AANA,CAAC,qBAEG;AACI,YAAU;AACV,WAAS;AACb;",
+  "names": []
+}

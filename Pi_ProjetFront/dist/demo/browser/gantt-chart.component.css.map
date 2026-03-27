@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["angular:styles/component:css;54d13a50ebd7d6bc9c59fd19bf6b189dd5471615fa09cef487248e22b03b7d67;C:/Users/msi/Downloads/billing-complete-v8/billing-project/Pi_ProjetFront/src/app/pages/app/task-manage/gantt-chart.component.ts"],
+  "sourcesContent": ["\n            mat-progress-bar.height-15 {\n                --mat-progress-bar-track-height: 15px;\n                --mat-progress-bar-active-indicator-height: 15px;\n            }\n        "],
+  "mappings": ";AACY,gBAAgB,CAAC;AACb,mCAAiC;AACjC,8CAA4C;AAChD;",
+  "names": []
+}

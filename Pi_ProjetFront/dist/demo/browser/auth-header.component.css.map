@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["angular:styles/component:css;54355459eb106cc790cc85fe63f2e9764e4d90f391e81b6070afd11068199cda;C:/Users/msi/Downloads/billing-complete-v8/billing-project/Pi_ProjetFront/src/app/components/auth-header/auth-header.component.ts"],
+  "sourcesContent": ["\n        .unitum-logo-icon { display:flex; align-items:center; margin-right:10px; }\n        .unitum-logo-text { font-size:18px; font-weight:700; letter-spacing:-0.5px; }\n    "],
+  "mappings": ";AACQ,CAAC;AAAmB,WAAQ;AAAM,eAAY;AAAQ,gBAAa;AAAM;AACzE,CAAC;AAAmB,aAAU;AAAM,eAAY;AAAK,kBAAe;AAAQ;",
+  "names": []
+}

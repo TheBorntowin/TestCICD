@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["angular:styles/component:css;6b4f6d8ef6ccad8fb27c42219016a9a8ee8144b1cf1b8a3ab8aa73559d8ac346;C:/Users/msi/Downloads/billing-complete-v8/billing-project/Pi_ProjetFront/src/app/users/users.component.ts"],
+  "sourcesContent": ["\n    .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }\n  "],
+  "mappings": ";AACI,CAAC;AAAQ,WAAS,IAAI;AAAM,iBAAe;AAAM,aAAW;AAAM,eAAa;AAAK;",
+  "names": []
+}

@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["angular:styles/component:css;d9e99e1e1009d4a20169ba00152bff5bb3acc355c8c8582d29f28ecd079b3584;C:/Users/msi/Downloads/billing-complete-v8/billing-project/Pi_ProjetFront/src/app/pages/app/po/po-dashboard.component.ts"],
+  "sourcesContent": ["\n    .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }\n    .progress-bar { height: 6px; }\n  "],
+  "mappings": ";AACI,CAAC;AAAQ,WAAS,IAAI;AAAM,iBAAe;AAAM,aAAW;AAAM,eAAa;AAAK;AACpF,CAAC;AAAe,UAAQ;AAAK;",
+  "names": []
+}

@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["angular:styles/component:css;aa142bcc569ddc43485b643b6ab95413d8a021efb1c28f0fd2f98c70c16df421;C:/Users/msi/Downloads/billing-complete-v8/billing-project/Pi_ProjetFront/src/app/components/notification-sidenav/app-notification-sidenav.component.ts"],
+  "sourcesContent": ["\n            mat-list mat-list-item {\n                border-bottom: 1px dashed rgba(180, 180, 180, 0.5);\n            }\n        "],
+  "mappings": ";AACY,SAAS;AACL,iBAAe,IAAI,OAAO,KAAK,GAAG,EAAE,GAAG,EAAE,GAAG,EAAE;AAClD;",
+  "names": []
+}

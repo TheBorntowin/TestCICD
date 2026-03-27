@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["angular:styles/component:css;2413c5655cfc42a9a2e4b675549d0b32190ee44ca17c72f07a2aabcd085bcf69;C:/Users/msi/Downloads/billing-complete-v8/billing-project/Pi_ProjetFront/src/app/pages/app/projects/projects.component.ts"],
+  "sourcesContent": ["\n            :host ::ng-deep swiper-container.small-nav-v50::part(button-next),\n            :host ::ng-deep swiper-container.small-nav-v50::part(button-prev) {\n                width: 20px;\n                height: 20px;\n                border-radius: 50%;\n                top: 0;\n                margin-top: 1.4rem;\n                left: auto;\n                right: 1rem;\n            }\n            :host ::ng-deep swiper-container.small-nav-v50::part(button-prev) {\n                right: 2.5rem;\n            }\n        "],
+  "mappings": ";AACY,MAAM,UAAU,gBAAgB,CAAC,aAAa,OAAO;AACrD,MAAM,UAAU,gBAAgB,CADC,aACa,OAAO;AACjD,SAAO;AACP,UAAQ;AACR,iBAAe;AACf,OAAK;AACL,cAAY;AACZ,QAAM;AACN,SAAO;AACX;AACA,MAAM,UAAU,gBAAgB,CAVC,aAUa,OAAO;AACjD,SAAO;AACX;",
+  "names": []
+}
