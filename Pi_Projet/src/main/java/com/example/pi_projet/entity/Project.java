@@ -36,9 +36,14 @@ public class Project {
     @Column(name = "template_id")
     private java.util.UUID templateId;
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "template_id", insertable = false, updatable = false)
     private ProjectTemplate template;
+
+    // Phases JSON copied from template at creation time so project details can display them
+    @Column(name = "phases_json", columnDefinition = "TEXT")
+    private String phasesJson;
 
     // TODO: Project likely needs FK relations to Task, Sprint, or Phase entities from other modules
 

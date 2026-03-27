@@ -203,20 +203,69 @@ interface ProjectMemberView {
             }
 
             <!-- ── Phases ── -->
-            <mat-card class="mb-3 mb-lg-4" style="border:1.5px dashed rgba(0,0,0,0.1);">
-                <mat-card-content>
-                    <div class="d-flex align-items-center gap-3">
-                        <div style="width:40px;height:40px;border-radius:10px;background:rgba(99,102,241,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <mat-icon class="material-icons-outlined" style="color:#6366f1;">timeline</mat-icon>
+            <mat-card class="mb-3 mb-lg-4">
+                <mat-card-content class="py-3">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <div style="width:36px;height:36px;border-radius:10px;background:rgba(99,102,241,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <mat-icon class="material-icons-outlined" style="color:#6366f1;font-size:20px;width:20px;height:20px;">account_tree</mat-icon>
                         </div>
                         <div class="flex-grow-1">
-                            <h5 class="mb-0">Phases</h5>
-                            <p class="text-secondary small mb-0">Phase breakdown is defined at project creation via templates. This project has no saved phase structure.</p>
+                            <h5 class="mb-0">
+                                Phases
+                                @if (parsedProjectPhases().length > 0) {
+                                    <span class="badge badge-light ms-1" style="font-size:11px;">{{ parsedProjectPhases().length }}</span>
+                                }
+                            </h5>
+                            @if (parsedProjectPhases().length === 0) {
+                                <p class="text-secondary small mb-0">No phase structure defined for this project.</p>
+                            }
                         </div>
-                        @if (canManageProjects()) {
-                        <span class="badge badge-light flex-shrink-0">Planned via template</span>
+                        @if (project()?.templateId) {
+                            <span class="badge badge-light flex-shrink-0" style="font-size:10px;">
+                                <mat-icon class="material-icons-outlined align-middle" style="font-size:11px;width:11px;height:11px;">layers</mat-icon>
+                                From template
+                            </span>
                         }
                     </div>
+
+                    @if (parsedProjectPhases().length > 0) {
+                        <!-- Phase flow chips -->
+                        <div class="d-flex align-items-center flex-wrap gap-1 mb-3">
+                            @for (phase of parsedProjectPhases(); track $index; let i = $index) {
+                                <div class="d-flex align-items-center">
+                                    <div style="display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;border:1.5px solid;"
+                                         [style.background]="phaseColor(i) + '14'"
+                                         [style.borderColor]="phaseColor(i) + '40'"
+                                         [style.color]="phaseColor(i)">
+                                        <span style="width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;"
+                                              [style.background]="phaseColor(i) + '25'">{{ i + 1 }}</span>
+                                        {{ phase.name || 'Phase ' + (i + 1) }}
+                                        @if (phase.durationDays && phase.durationDays > 0) {
+                                            <span style="opacity:0.65;font-size:10px;">{{ phase.durationDays }}d</span>
+                                        }
+                                    </div>
+                                    @if (i < parsedProjectPhases().length - 1) {
+                                        <mat-icon style="font-size:14px;width:14px;height:14px;color:#94a3b8;flex-shrink:0;margin:0 2px;">chevron_right</mat-icon>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Visual timeline bar -->
+                        @if (parsedProjectPhases().length > 1) {
+                            <div class="d-flex gap-1" style="height:6px;border-radius:3px;overflow:hidden;">
+                                @for (phase of parsedProjectPhases(); track $index; let i = $index) {
+                                    <div style="flex:1;border-radius:2px;" [style.background]="phaseColor(i)"></div>
+                                }
+                            </div>
+                        }
+                    } @else {
+                        <div style="border:1.5px dashed rgba(0,0,0,0.1);border-radius:10px;padding:16px;text-align:center;">
+                            <mat-icon class="material-icons-outlined text-secondary mb-1" style="font-size:28px;width:28px;height:28px;">timeline</mat-icon>
+                            <p class="text-secondary small mb-1">No phases defined for this project.</p>
+                            <p class="text-secondary small mb-0" style="font-size:11px;">Projects created from templates will show the template's phase structure here.</p>
+                        </div>
+                    }
                 </mat-card-content>
             </mat-card>
 
@@ -504,6 +553,20 @@ export class ProjectDetailsComponent implements OnInit {
         if (now >= end) return 100;
         return Math.round(((now - start) / (end - start)) * 100);
     });
+
+    readonly parsedProjectPhases = computed((): Array<{ name?: string; durationDays?: number }> => {
+        const json = this.project()?.phasesJson;
+        if (!json) return [];
+        try {
+            const a = JSON.parse(json);
+            return Array.isArray(a) ? a as Array<{ name?: string; durationDays?: number }> : [];
+        } catch { return []; }
+    });
+
+    phaseColor(index: number): string {
+        const colors = ["#6366f1", "#0ea5e9", "#14b8a6", "#f59e0b", "#ec4899", "#8b5cf6", "#10b981", "#f97316"];
+        return colors[index % colors.length];
+    }
 
     ngOnInit(): void {
         this.route.paramMap.subscribe((params) => {

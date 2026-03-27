@@ -15,6 +15,7 @@ import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { MatDialog } from "@angular/material/dialog";
 import { M2TemplateService } from "./m2-template.service";
 import { TemplateDeleteConfirmDialogComponent } from "./template-delete-confirm-dialog.component";
+import { UseTemplateWizardDialogComponent, UseTemplateWizardResult } from "./use-template-wizard-dialog.component";
 
 export interface TemplateCardItem {
     id: string;
@@ -122,7 +123,7 @@ export interface TemplateCardItem {
                                                     <mat-icon class="material-icons-outlined">open_in_new</mat-icon>
                                                     <span>View Details</span>
                                                 </button>
-                                                @if (item.status === 'APPROVED') {
+                                                @if (item.status === 'APPROVED' || (item.status === 'DRAFT' && item.createdBy === currentUserId)) {
                                                     <button mat-menu-item (click)="$event.stopPropagation(); useTemplate(item)">
                                                         <mat-icon class="material-icons-outlined">rocket_launch</mat-icon>
                                                         <span>Use Template</span>
@@ -314,7 +315,15 @@ export class TemplatesCardsComponent implements OnInit, OnChanges {
     }
 
     useTemplate(item: TemplateCardItem): void {
-        this.router.navigate(["/app/templates", item.id]);
+        const ref = this.dialog.open(UseTemplateWizardDialogComponent, {
+            width: "820px", maxWidth: "96vw", maxHeight: "90vh", autoFocus: false,
+            data: { templateId: item.id },
+        });
+        ref.afterClosed().subscribe((result?: UseTemplateWizardResult) => {
+            if (result?.projectId && result?.workspaceId) {
+                this.router.navigate(["/app/real-projects", result.workspaceId, result.projectId]);
+            }
+        });
     }
 
     forkTemplate(item: TemplateCardItem): void {

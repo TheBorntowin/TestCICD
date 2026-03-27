@@ -11,6 +11,8 @@ export interface M2ProjectSummary {
     startDate?: string;
     endDate?: string;
     createdAt?: string;
+    templateId?: string;
+    phasesJson?: string;
     workspace?: {
         id: string;
     };

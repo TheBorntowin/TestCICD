@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, inject, signal } from "@angular/core";
+import { Component, OnInit, ViewChild, inject, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule, NgForm } from "@angular/forms";
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from "@angular/material/dialog";
@@ -31,13 +31,16 @@ interface TemplateStarter {
     config: string;
 }
 
+export interface PhaseRow { name: string; durationDays: number; }
+export interface RoleRow  { role: string;  count: number; }
+
 const STARTERS: TemplateStarter[] = [
     {
         type: "SCRUM", icon: "sprint", label: "Scrum", tagline: "Iterative sprints with backlog & reviews",
         color: "#6366f1", tags: "agile, scrum, sprint, iterative",
         useCaseDescription: "Best for teams that deliver value incrementally through 2-week sprints with daily standups and retrospectives.",
         effort: "MEDIUM", difficulty: "INTERMEDIATE", duration: 90, teamStrategy: "AUTO",
-        phases: '[{"name":"Product Backlog"},{"name":"Sprint Planning"},{"name":"Sprint Execution"},{"name":"Sprint Review"},{"name":"Sprint Retrospective"}]',
+        phases: '[{"name":"Product Backlog","durationDays":7},{"name":"Sprint Planning","durationDays":1},{"name":"Sprint Execution","durationDays":14},{"name":"Sprint Review","durationDays":1},{"name":"Sprint Retrospective","durationDays":1}]',
         roles: '[{"role":"SCRUM_MASTER","count":1},{"role":"PRODUCT_OWNER","count":1},{"role":"DEVELOPER","count":4},{"role":"QA","count":1}]',
         config: '{"methodology":"SCRUM","sprintDurationDays":14,"priority":"MEDIUM","maxTeamSize":8}',
     },
@@ -46,7 +49,7 @@ const STARTERS: TemplateStarter[] = [
         color: "#0ea5e9", tags: "kanban, continuous, flow, board",
         useCaseDescription: "Best for support teams and ongoing feature work with continuous delivery and no fixed iterations.",
         effort: "LOW", difficulty: "BEGINNER", duration: 30, teamStrategy: "MANUAL",
-        phases: '[{"name":"Backlog"},{"name":"Ready"},{"name":"In Progress"},{"name":"Review"},{"name":"Done"}]',
+        phases: '[{"name":"Backlog","durationDays":0},{"name":"Ready","durationDays":0},{"name":"In Progress","durationDays":0},{"name":"Review","durationDays":0},{"name":"Done","durationDays":0}]',
         roles: '[{"role":"KANBAN_LEAD","count":1},{"role":"DEVELOPER","count":3},{"role":"REVIEWER","count":1}]',
         config: '{"methodology":"KANBAN","wipLimit":5,"priority":"MEDIUM"}',
     },
@@ -55,7 +58,7 @@ const STARTERS: TemplateStarter[] = [
         color: "#14b8a6", tags: "waterfall, sequential, phase-gate, milestone",
         useCaseDescription: "Best for projects with fixed requirements, regulatory compliance, or when all requirements are known upfront.",
         effort: "HIGH", difficulty: "ADVANCED", duration: 180, teamStrategy: "MANUAL",
-        phases: '[{"name":"Requirements"},{"name":"System Design"},{"name":"Implementation"},{"name":"Integration & Testing"},{"name":"Deployment"},{"name":"Maintenance"}]',
+        phases: '[{"name":"Requirements","durationDays":21},{"name":"System Design","durationDays":28},{"name":"Implementation","durationDays":60},{"name":"Integration & Testing","durationDays":30},{"name":"Deployment","durationDays":14},{"name":"Maintenance","durationDays":30}]',
         roles: '[{"role":"PROJECT_MANAGER","count":1},{"role":"BUSINESS_ANALYST","count":1},{"role":"ARCHITECT","count":1},{"role":"DEVELOPER","count":5},{"role":"QA","count":2}]',
         config: '{"methodology":"WATERFALL","priority":"HIGH","approvalRequired":true}',
     },
@@ -93,6 +96,10 @@ const STARTERS: TemplateStarter[] = [
         .starter-card:hover { border-color:var(--bs-primary,#6366f1); background:rgba(99,102,241,0.04); transform:translateY(-2px); box-shadow:0 6px 16px rgba(0,0,0,0.08); }
         .starter-card-selected { border-color:var(--bs-primary,#6366f1); background:rgba(99,102,241,0.06); box-shadow:0 0 0 3px rgba(99,102,241,0.18); }
         .starter-icon { width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .row-card { border:1px solid rgba(0,0,0,0.1); border-radius:10px; padding:10px 12px; margin-bottom:8px; background:#fff; transition:box-shadow .15s; }
+        .row-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.07); }
+        .phase-badge { width:24px; height:24px; border-radius:50%; background:rgba(99,102,241,0.12); color:#6366f1; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; }
+        .empty-state { border:1.5px dashed rgba(0,0,0,0.12); border-radius:10px; padding:18px; text-align:center; }
     `],
     template: `
         <!-- Fixed header -->
@@ -271,26 +278,128 @@ const STARTERS: TemplateStarter[] = [
                 </form>
             }
 
-            <!-- Step 2: Structure -->
+            <!-- Step 2: Phases & Roles (Visual UI) -->
             @if (mode() === 'wizard' && currentStep() === 2) {
-                <p class="text-secondary small mb-3">Define the default structure — phases, roles, and project config JSON.</p>
-                <mat-form-field appearance="outline" class="w-100 mb-2">
-                    <mat-label>Default Phases (JSON)</mat-label>
-                    <textarea matInput [(ngModel)]="defaultPhasesJson" rows="3" placeholder='[{"name":"Planning"},{"name":"Execution"}]'></textarea>
-                    @if (defaultPhasesJson) { <mat-hint>{{ phaseCount(defaultPhasesJson) }} phases parsed</mat-hint> }
-                </mat-form-field>
 
-                <mat-form-field appearance="outline" class="w-100 mb-2">
-                    <mat-label>Default Roles (JSON)</mat-label>
-                    <textarea matInput [(ngModel)]="defaultRolesJson" rows="3" placeholder='[{"role":"SCRUM_MASTER","count":1},{"role":"DEVELOPER","count":4}]'></textarea>
-                    @if (defaultRolesJson) { <mat-hint>{{ roleCount(defaultRolesJson) }} roles parsed</mat-hint> }
-                </mat-form-field>
+                <!-- ── Phases ── -->
+                <div class="mb-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div>
+                            <p class="fw-medium mb-0">
+                                <mat-icon class="material-icons-outlined align-middle me-1" style="font-size:16px;width:16px;height:16px;color:#6366f1;">account_tree</mat-icon>
+                                Phases
+                                <span class="badge badge-light ms-1">{{ phases().length }}</span>
+                            </p>
+                            <p class="text-secondary small mb-0">Define the stages of this template's lifecycle</p>
+                        </div>
+                        <button matButton (click)="addPhase()">
+                            <mat-icon class="material-icons-outlined">add</mat-icon> Add Phase
+                        </button>
+                    </div>
 
-                <mat-form-field appearance="outline" class="w-100 mb-2">
-                    <mat-label>Default Project Config (JSON)</mat-label>
-                    <textarea matInput [(ngModel)]="defaultProjectConfigJson" rows="3" placeholder='{"priority":"MEDIUM","methodology":"SCRUM"}'></textarea>
-                    <mat-hint>Pre-fills the project creation form (optional)</mat-hint>
-                </mat-form-field>
+                    @if (phases().length === 0) {
+                        <div class="empty-state">
+                            <mat-icon class="material-icons-outlined text-secondary mb-1" style="font-size:28px;width:28px;height:28px;">timeline</mat-icon>
+                            <p class="text-secondary small mb-0">No phases yet. Add phases to define your template workflow.</p>
+                        </div>
+                    }
+
+                    @for (phase of phases(); track $index; let i = $index) {
+                        <div class="row-card d-flex align-items-center gap-2">
+                            <div class="phase-badge">{{ i + 1 }}</div>
+                            <mat-form-field appearance="outline" class="flex-grow-1 mb-0" style="font-size:13px;">
+                                <mat-label>Phase name</mat-label>
+                                <input matInput [value]="phase.name"
+                                    (input)="updatePhaseName(i, $any($event.target).value)"
+                                    placeholder="e.g. Planning" />
+                            </mat-form-field>
+                            <mat-form-field appearance="outline" style="width:100px;font-size:13px;flex-shrink:0;" class="mb-0">
+                                <mat-label>Days</mat-label>
+                                <input matInput type="number" [value]="phase.durationDays"
+                                    (input)="updatePhaseDuration(i, +$any($event.target).value)"
+                                    min="0" />
+                            </mat-form-field>
+                            <button matIconButton (click)="removePhase(i)" style="flex-shrink:0;color:#ef4444;">
+                                <mat-icon class="material-icons-outlined">delete_outline</mat-icon>
+                            </button>
+                        </div>
+                    }
+
+                    @if (phases().length > 1) {
+                        <!-- Mini visual timeline preview -->
+                        <div class="d-flex gap-1 mt-2" style="height:8px;border-radius:4px;overflow:hidden;">
+                            @for (phase of phases(); track $index) {
+                                <div style="flex:1;border-radius:3px;" [style.background]="phaseColor($index)"></div>
+                            }
+                        </div>
+                        <p class="text-secondary" style="font-size:10px;margin-top:4px;">
+                            {{ totalPhaseDays() }} total days · {{ phases().length }} phases
+                        </p>
+                    }
+                </div>
+
+                <mat-divider class="mb-3"></mat-divider>
+
+                <!-- ── Roles ── -->
+                <div class="mb-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div>
+                            <p class="fw-medium mb-0">
+                                <mat-icon class="material-icons-outlined align-middle me-1" style="font-size:16px;width:16px;height:16px;color:#0d9488;">group</mat-icon>
+                                Team Roles
+                                <span class="badge badge-light ms-1">{{ roles().length }}</span>
+                            </p>
+                            <p class="text-secondary small mb-0">Recommended team roles for this template</p>
+                        </div>
+                        <button matButton (click)="addRole()">
+                            <mat-icon class="material-icons-outlined">add</mat-icon> Add Role
+                        </button>
+                    </div>
+
+                    @if (roles().length === 0) {
+                        <div class="empty-state">
+                            <mat-icon class="material-icons-outlined text-secondary mb-1" style="font-size:28px;width:28px;height:28px;">group</mat-icon>
+                            <p class="text-secondary small mb-0">No roles defined. Add recommended team roles.</p>
+                        </div>
+                    }
+
+                    @for (role of roles(); track $index; let i = $index) {
+                        <div class="row-card d-flex align-items-center gap-2">
+                            <mat-icon class="material-icons-outlined text-secondary flex-shrink-0" style="font-size:18px;width:18px;height:18px;">person</mat-icon>
+                            <mat-form-field appearance="outline" class="flex-grow-1 mb-0" style="font-size:13px;">
+                                <mat-label>Role name</mat-label>
+                                <input matInput [value]="role.role"
+                                    (input)="updateRoleName(i, $any($event.target).value)"
+                                    placeholder="e.g. SCRUM_MASTER" />
+                            </mat-form-field>
+                            <mat-form-field appearance="outline" style="width:80px;font-size:13px;flex-shrink:0;" class="mb-0">
+                                <mat-label>Count</mat-label>
+                                <input matInput type="number" [value]="role.count"
+                                    (input)="updateRoleCount(i, +$any($event.target).value)"
+                                    min="1" />
+                            </mat-form-field>
+                            <button matIconButton (click)="removeRole(i)" style="flex-shrink:0;color:#ef4444;">
+                                <mat-icon class="material-icons-outlined">delete_outline</mat-icon>
+                            </button>
+                        </div>
+                    }
+                </div>
+
+                <mat-divider class="mb-3"></mat-divider>
+
+                <!-- ── Config JSON (advanced, optional) ── -->
+                <div>
+                    <p class="fw-medium mb-1" style="font-size:13px;">
+                        <mat-icon class="material-icons-outlined align-middle me-1" style="font-size:14px;width:14px;height:14px;color:#94a3b8;">settings</mat-icon>
+                        Project Config JSON <span class="text-secondary fw-normal">(optional, advanced)</span>
+                    </p>
+                    <mat-form-field appearance="outline" class="w-100 mb-0">
+                        <textarea matInput [(ngModel)]="defaultProjectConfigJson" rows="3"
+                            placeholder='{"priority":"MEDIUM","methodology":"SCRUM"}'></textarea>
+                        <mat-hint>Pre-fills project creation — must be valid JSON if provided</mat-hint>
+                        @if (configJsonError) { <mat-error>{{ configJsonError }}</mat-error> }
+                    </mat-form-field>
+                </div>
             }
 
             <!-- Step 3: Review -->
@@ -304,9 +413,37 @@ const STARTERS: TemplateStarter[] = [
                 <div class="summary-row"><span>Team Strategy</span><strong>{{ teamStrategy }}</strong></div>
                 <div class="summary-row"><span>Tags</span><strong>{{ tags || '—' }}</strong></div>
                 <div class="summary-row"><span>Use Case</span><strong>{{ useCaseDescription || '—' }}</strong></div>
-                <div class="summary-row"><span>Phases JSON</span><strong>{{ defaultPhasesJson ? phaseCount(defaultPhasesJson) + ' phases' : '—' }}</strong></div>
-                <div class="summary-row"><span>Roles JSON</span><strong>{{ defaultRolesJson ? roleCount(defaultRolesJson) + ' roles' : '—' }}</strong></div>
-                <div class="summary-row"><span>Config JSON</span><strong>{{ defaultProjectConfigJson ? '✓ provided' : '—' }}</strong></div>
+                <div class="summary-row">
+                    <span>Phases</span>
+                    <strong>{{ phases().length > 0 ? phases().length + ' phases' : '—' }}</strong>
+                </div>
+                @if (phases().length > 0) {
+                    <div style="padding:8px 0 6px;">
+                        <div class="d-flex flex-wrap gap-1">
+                            @for (p of phases(); track $index; let i = $index) {
+                                <span style="background:rgba(99,102,241,0.1);color:#6366f1;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:500;">
+                                    {{ i+1 }}. {{ p.name }}{{ p.durationDays ? ' (' + p.durationDays + 'd)' : '' }}
+                                </span>
+                            }
+                        </div>
+                    </div>
+                }
+                <div class="summary-row">
+                    <span>Roles</span>
+                    <strong>{{ validRoles().length > 0 ? validRoles().length + ' roles' : '—' }}</strong>
+                </div>
+                @if (validRoles().length > 0) {
+                    <div style="padding:8px 0 6px;">
+                        <div class="d-flex flex-wrap gap-1">
+                            @for (r of validRoles(); track $index) {
+                                <span style="background:rgba(13,148,136,0.1);color:#0d9488;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:500;">
+                                    {{ r.role }}{{ r.count > 1 ? ' ×' + r.count : '' }}
+                                </span>
+                            }
+                        </div>
+                    </div>
+                }
+                <div class="summary-row"><span>Config JSON</span><strong>{{ defaultProjectConfigJson.trim() ? '✓ provided' : '—' }}</strong></div>
                 <p class="small text-secondary mt-3 mb-0">The template will be saved as <strong>DRAFT</strong>. You can publish it for review from the Templates Hub.</p>
             }
         </mat-dialog-content>
@@ -358,10 +495,17 @@ export class CreateTemplateDialogComponent implements OnInit {
     readonly mode = signal<"pick" | "wizard">("pick");
     readonly pickedType = signal<string>("");
     readonly currentStep = signal(0);
-    readonly stepLabels = ["Basics", "Complexity", "Structure", "Review"];
+    readonly stepLabels = ["Basics", "Complexity", "Phases & Roles", "Review"];
     readonly submitting = signal(false);
 
     readonly starters: TemplateStarter[] = STARTERS;
+
+    // Phases and roles as typed arrays (auto-converted to JSON on submit)
+    readonly phases = signal<PhaseRow[]>([]);
+    readonly roles = signal<RoleRow[]>([]);
+
+    readonly validRoles = computed(() => this.roles().filter(r => r.role.trim().length > 0));
+    readonly totalPhaseDays = computed(() => this.phases().reduce((s, p) => s + (p.durationDays || 0), 0));
 
     // Computed: find the full starter object from pickedType
     pickedStarter(): TemplateStarter | undefined {
@@ -379,10 +523,9 @@ export class CreateTemplateDialogComponent implements OnInit {
     estimatedDurationDays: number | null = null;
     teamStrategy = "MANUAL";
     tags = "";
-    // Step 2
+    // Step 2 (config JSON only — phases/roles use signal arrays)
     defaultProjectConfigJson = "";
-    defaultPhasesJson = "";
-    defaultRolesJson = "";
+    configJsonError = "";
 
     ngOnInit(): void {
         if (this.dialogData?.starterType) {
@@ -416,11 +559,33 @@ export class CreateTemplateDialogComponent implements OnInit {
         this.tags = s.tags;
         this.useCaseDescription = s.useCaseDescription;
         this.defaultProjectConfigJson = s.config;
-        this.defaultPhasesJson = s.phases;
-        this.defaultRolesJson = s.roles;
         if (s.type !== "CUSTOM") {
             this.name = s.label + " Template";
         }
+        // Parse phases JSON into typed array
+        try {
+            const parsed = JSON.parse(s.phases || "[]");
+            this.phases.set(
+                Array.isArray(parsed)
+                    ? parsed.map((p: { name?: string; durationDays?: number }) => ({
+                          name: p.name || "",
+                          durationDays: p.durationDays ?? 0,
+                      }))
+                    : []
+            );
+        } catch { this.phases.set([]); }
+        // Parse roles JSON into typed array
+        try {
+            const parsed = JSON.parse(s.roles || "[]");
+            this.roles.set(
+                Array.isArray(parsed)
+                    ? parsed.map((r: { role?: string; count?: number }) => ({
+                          role: r.role || "",
+                          count: r.count ?? 1,
+                      }))
+                    : []
+            );
+        } catch { this.roles.set([]); }
     }
 
     backToPick(): void {
@@ -437,11 +602,56 @@ export class CreateTemplateDialogComponent implements OnInit {
                 if (!this.name.trim() || this.name.trim().length < 3) return;
             }
         }
+        if (this.currentStep() === 2) {
+            // Validate config JSON if provided
+            this.configJsonError = "";
+            const cfg = this.defaultProjectConfigJson.trim();
+            if (cfg) {
+                try { JSON.parse(cfg); } catch {
+                    this.configJsonError = "Config JSON is not valid — check the format.";
+                    return;
+                }
+            }
+        }
         if (this.currentStep() < 3) this.currentStep.update(s => s + 1);
     }
 
     prevStep(): void {
         if (this.currentStep() > 0) this.currentStep.update(s => s - 1);
+    }
+
+    // ── Phase management ──
+    addPhase(): void {
+        this.phases.update(ps => [...ps, { name: `Phase ${ps.length + 1}`, durationDays: 14 }]);
+    }
+    removePhase(index: number): void {
+        this.phases.update(ps => ps.filter((_, i) => i !== index));
+    }
+    updatePhaseName(index: number, name: string): void {
+        this.phases.update(ps => ps.map((p, i) => i === index ? { ...p, name } : p));
+    }
+    updatePhaseDuration(index: number, durationDays: number): void {
+        this.phases.update(ps => ps.map((p, i) => i === index ? { ...p, durationDays: isNaN(durationDays) ? 0 : durationDays } : p));
+    }
+
+    // ── Role management ──
+    addRole(): void {
+        this.roles.update(rs => [...rs, { role: "", count: 1 }]);
+    }
+    removeRole(index: number): void {
+        this.roles.update(rs => rs.filter((_, i) => i !== index));
+    }
+    updateRoleName(index: number, role: string): void {
+        this.roles.update(rs => rs.map((r, i) => i === index ? { ...r, role } : r));
+    }
+    updateRoleCount(index: number, count: number): void {
+        this.roles.update(rs => rs.map((r, i) => i === index ? { ...r, count: isNaN(count) || count < 1 ? 1 : count } : r));
+    }
+
+    // ── Phase color palette ──
+    phaseColor(index: number): string {
+        const colors = ["#6366f1","#0ea5e9","#14b8a6","#f59e0b","#ec4899","#8b5cf6","#10b981","#f97316"];
+        return colors[index % colors.length];
     }
 
     submit(): void {
@@ -463,8 +673,15 @@ export class CreateTemplateDialogComponent implements OnInit {
         if (this.tags.trim()) body["tags"] = this.tags.trim();
         if (this.useCaseDescription.trim()) body["useCaseDescription"] = this.useCaseDescription.trim();
         if (this.defaultProjectConfigJson.trim()) body["defaultProjectConfigJson"] = this.defaultProjectConfigJson.trim();
-        if (this.defaultPhasesJson.trim()) body["defaultPhasesJson"] = this.defaultPhasesJson.trim();
-        if (this.defaultRolesJson.trim()) body["defaultRolesJson"] = this.defaultRolesJson.trim();
+
+        // Convert arrays back to JSON strings
+        if (this.phases().length > 0) {
+            body["defaultPhasesJson"] = JSON.stringify(this.phases());
+        }
+        const vRoles = this.validRoles();
+        if (vRoles.length > 0) {
+            body["defaultRolesJson"] = JSON.stringify(vRoles);
+        }
 
         this.templateService.create(body).subscribe({
             next: () => {

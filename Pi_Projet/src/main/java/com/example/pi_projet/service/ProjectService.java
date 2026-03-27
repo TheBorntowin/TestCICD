@@ -121,7 +121,8 @@ public class ProjectService {
     public Project createProjectFromTemplate(UUID workspaceId, UUID templateId, String nameOverride, LocalDate startDate, LocalDate endDate, Long requesterId) {
         ProjectTemplate template = templateService.getById(templateId)
             .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Template not found"));
-        if (template.getStatus() != ProjectTemplate.TemplateStatus.APPROVED) {
+        boolean isOwner = template.getCreatedBy() != null && template.getCreatedBy().equals(requesterId);
+        if (template.getStatus() != ProjectTemplate.TemplateStatus.APPROVED && !isOwner) {
             throw new Module2Exception(FORBIDDEN, "Template must be APPROVED before use");
         }
         if (!userRepo.existsById(requesterId)) throw new Module2Exception(NOT_FOUND, "Creator user not found");
@@ -140,6 +141,7 @@ public class ProjectService {
             .visibility(template.getDefaultVisibility() == ProjectTemplate.DefaultVisibility.PUBLIC ? Visibility.PUBLIC : Visibility.PRIVATE)
             .startDate(startDate)
             .endDate(endDate)
+            .phasesJson(template.getDefaultPhasesJson())
             .build();
         p = projectRepo.save(p);
         String orgType = resolveWorkspaceOrgType(ws);

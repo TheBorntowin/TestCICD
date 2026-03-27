@@ -221,10 +221,12 @@ export class RejectTemplateDialogComponent {
                                 {{ statusLabel(template()!.status) }}
                             </span>
                             <!-- Action buttons -->
-                            @if (template()!.status === 'APPROVED') {
+                            @if (template()!.status === 'APPROVED' || (isOwner() && template()!.status === 'DRAFT')) {
                                 <button matButton="elevated" class="text-theme me-1" (click)="openUseTemplateDialog()">
                                     <mat-icon class="material-icons-outlined">rocket_launch</mat-icon> Use Template
                                 </button>
+                            }
+                            @if (template()!.status === 'APPROVED') {
                                 <button matButton class="me-1" (click)="forkTemplate()">
                                     <mat-icon class="material-icons-outlined">fork_right</mat-icon> Fork
                                 </button>
@@ -353,7 +355,9 @@ export class RejectTemplateDialogComponent {
                                     <h5 class="mb-2">Edit Template</h5>
                                     <mat-form-field appearance="outline" class="w-100 mb-2">
                                         <mat-label>Name *</mat-label>
-                                        <input matInput [(ngModel)]="editName" required maxlength="100" />
+                                        <input matInput [(ngModel)]="editName" required minlength="3" maxlength="150" (ngModelChange)="editNameError=''" />
+                                        @if (editNameError) { <mat-error>{{ editNameError }}</mat-error> }
+                                        <mat-hint align="end">{{ editName.length }}/150</mat-hint>
                                     </mat-form-field>
                                     <mat-form-field appearance="outline" class="w-100 mb-2">
                                         <mat-label>Type</mat-label>
@@ -393,6 +397,7 @@ export class RejectTemplateDialogComponent {
                                     <mat-form-field appearance="outline" class="w-100 mb-2">
                                         <mat-label>Est. Duration (days)</mat-label>
                                         <input matInput type="number" [(ngModel)]="editDuration" min="1" />
+                                        <mat-hint>Minimum 1 day</mat-hint>
                                     </mat-form-field>
                                 }
                             </mat-card-content>
@@ -402,19 +407,53 @@ export class RejectTemplateDialogComponent {
                         <mat-card>
                             <mat-card-content class="py-3">
                                 <h5 class="mb-2">Community</h5>
-                                <div class="d-flex align-items-center gap-2 mb-2">
+
+                                <!-- Average rating (always visible) -->
+                                <div class="d-flex align-items-center gap-2 mb-3">
                                     <div class="d-flex">
                                         @for (s of starsArray(template()!.rating); track $index) {
-                                            <mat-icon style="font-size:18px;width:18px;height:18px;color:#f59e0b;cursor:pointer;" (click)="rateTemplate($index + 1)">{{ s }}</mat-icon>
+                                            <mat-icon style="font-size:18px;width:18px;height:18px;color:#f59e0b;">{{ s }}</mat-icon>
                                         }
                                     </div>
-                                    <span class="small text-secondary">{{ template()!.rating | number:'1.1-1' }} ({{ template()!.ratingCount }} ratings)</span>
+                                    <span class="small fw-medium">{{ template()!.rating | number:'1.1-1' }}</span>
+                                    <span class="small text-secondary">({{ template()!.ratingCount }} {{ template()!.ratingCount === 1 ? 'rating' : 'ratings' }})</span>
                                 </div>
-                                <p class="small text-secondary mb-2">
+
+                                <!-- User rating interaction -->
+                                @if (userRating() === 0) {
+                                    <div class="mb-3">
+                                        <p class="small text-secondary mb-1">Rate this template:</p>
+                                        <div class="d-flex gap-1">
+                                            @for (i of [1,2,3,4,5]; track i) {
+                                                <mat-icon
+                                                    style="font-size:26px;width:26px;height:26px;cursor:pointer;transition:color 0.12s;"
+                                                    [style.color]="i <= (hoverRating || 0) ? '#f59e0b' : '#cbd5e1'"
+                                                    (mouseenter)="hoverRating = i"
+                                                    (mouseleave)="hoverRating = 0"
+                                                    (click)="rateTemplate(i)">
+                                                    {{ i <= (hoverRating || 0) ? 'star' : 'star_border' }}
+                                                </mat-icon>
+                                            }
+                                        </div>
+                                    </div>
+                                } @else {
+                                    <div class="mb-3 d-flex align-items-center gap-2 p-2 rounded" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);">
+                                        <div class="d-flex">
+                                            @for (i of [1,2,3,4,5]; track i) {
+                                                <mat-icon style="font-size:18px;width:18px;height:18px;" [style.color]="i <= userRating() ? '#f59e0b' : '#e2e8f0'">
+                                                    {{ i <= userRating() ? 'star' : 'star_border' }}
+                                                </mat-icon>
+                                            }
+                                        </div>
+                                        <span class="small fw-medium" style="color:#b45309;">Your rating: {{ userRating() }}/5</span>
+                                        <mat-icon class="material-icons-outlined ms-auto" style="font-size:14px;width:14px;height:14px;color:#b45309;">check_circle</mat-icon>
+                                    </div>
+                                }
+
+                                <p class="small text-secondary mb-0">
                                     <mat-icon class="material-icons-outlined align-middle" style="font-size:14px;width:14px;height:14px;">rocket_launch</mat-icon>
                                     {{ template()!.usageCount }} projects created from this template
                                 </p>
-                                <p class="small text-secondary mb-0">Click the stars above to rate this template (1–5).</p>
 
                                 <!-- Admin feature/trending controls -->
                                 @if (isAdmin() && template()!.status === 'APPROVED') {
@@ -444,15 +483,21 @@ export class RejectTemplateDialogComponent {
                                 @if (editMode()) {
                                     <mat-form-field appearance="outline" class="w-100 mb-2">
                                         <mat-label>Project Config JSON</mat-label>
-                                        <textarea matInput [(ngModel)]="editDefaultConfig" rows="4" placeholder='{"name":"","priority":"HIGH"}'></textarea>
+                                        <textarea matInput [(ngModel)]="editDefaultConfig" rows="4" placeholder='{"name":"","priority":"HIGH"}' (ngModelChange)="editConfigError=''"></textarea>
+                                        @if (editConfigError) { <mat-error>{{ editConfigError }}</mat-error> }
+                                        <mat-hint>Optional — must be valid JSON object if provided</mat-hint>
                                     </mat-form-field>
                                     <mat-form-field appearance="outline" class="w-100 mb-2">
                                         <mat-label>Phases JSON</mat-label>
-                                        <textarea matInput [(ngModel)]="editPhases" rows="4" placeholder='[{"name":"Planning"},{"name":"Execution"}]'></textarea>
+                                        <textarea matInput [(ngModel)]="editPhases" rows="4" placeholder='[{"name":"Planning"},{"name":"Execution"}]' (ngModelChange)="editPhasesError=''"></textarea>
+                                        @if (editPhasesError) { <mat-error>{{ editPhasesError }}</mat-error> }
+                                        <mat-hint>Optional — must be valid JSON array if provided</mat-hint>
                                     </mat-form-field>
                                     <mat-form-field appearance="outline" class="w-100 mb-2">
                                         <mat-label>Roles JSON</mat-label>
-                                        <textarea matInput [(ngModel)]="editRoles" rows="4" placeholder='[{"role":"SCRUM_MASTER"}]'></textarea>
+                                        <textarea matInput [(ngModel)]="editRoles" rows="4" placeholder='[{"role":"SCRUM_MASTER"}]' (ngModelChange)="editRolesError=''"></textarea>
+                                        @if (editRolesError) { <mat-error>{{ editRolesError }}</mat-error> }
+                                        <mat-hint>Optional — must be valid JSON array if provided</mat-hint>
                                     </mat-form-field>
                                 } @else {
                                     <!-- Phases — visual timeline -->
@@ -544,6 +589,14 @@ export class M2TemplateDetailsComponent implements OnInit {
     readonly error = signal("");
     readonly editMode = signal(false);
     readonly saving = signal(false);
+    readonly userRating = signal(0);
+    hoverRating = 0;
+
+    // Validation error messages for edit mode
+    editNameError = "";
+    editPhasesError = "";
+    editRolesError = "";
+    editConfigError = "";
 
     // edit fields
     editName = "";
@@ -622,12 +675,24 @@ export class M2TemplateDetailsComponent implements OnInit {
             next: (t) => {
                 this.template.set(t);
                 this.loading.set(false);
+                this.loadUserRating(id);
             },
             error: (err: HttpErrorResponse) => {
                 this.error.set(err.message || "Template not found.");
                 this.loading.set(false);
             },
         });
+    }
+
+    private ratingStorageKey(templateId: string): string {
+        const userId = this.authService.currentUser()?.id ?? "anon";
+        return `template-rating-${userId}-${templateId}`;
+    }
+
+    private loadUserRating(templateId: string): void {
+        const stored = localStorage.getItem(this.ratingStorageKey(templateId));
+        if (stored) this.userRating.set(parseInt(stored, 10) || 0);
+        else this.userRating.set(0);
     }
 
     statusLabel(status: string): string {
@@ -645,11 +710,14 @@ export class M2TemplateDetailsComponent implements OnInit {
     }
 
     rateTemplate(rating: number): void {
+        if (this.userRating() > 0) return; // already voted
         const id = this.templateId();
         if (!id) return;
         this.templateService.rate(id, rating).subscribe({
             next: (updated) => {
                 this.template.set({ ...this.template()!, rating: updated.rating, ratingCount: updated.ratingCount });
+                this.userRating.set(rating);
+                localStorage.setItem(this.ratingStorageKey(id), String(rating));
                 this.snackBar.open(`Rated ${rating}/5 — thank you!`, "Close", { duration: 3000 });
             },
             error: () => this.snackBar.open("Failed to submit rating.", "Close", { duration: 3500 }),
@@ -678,14 +746,49 @@ export class M2TemplateDetailsComponent implements OnInit {
 
     saveEdit(): void {
         if (this.saving()) return;
+
+        // Reset errors
+        this.editNameError = "";
+        this.editPhasesError = "";
+        this.editRolesError = "";
+        this.editConfigError = "";
+
+        // Validate name
+        const name = this.editName.trim();
+        if (!name) { this.editNameError = "Name is required."; return; }
+        if (name.length < 3) { this.editNameError = "Name must be at least 3 characters."; return; }
+        if (name.length > 150) { this.editNameError = "Name must be at most 150 characters."; return; }
+
+        // Validate duration
+        if (this.editDuration !== null && this.editDuration < 1) {
+            this.snackBar.open("Duration must be at least 1 day.", "Close", { duration: 4000 });
+            return;
+        }
+
+        // Validate JSON fields
+        const jsonValidations: { value: string; label: string; setErr: (e: string) => void }[] = [
+            { value: this.editDefaultConfig.trim(), label: "Project Config JSON", setErr: (e) => { this.editConfigError = e; } },
+            { value: this.editPhases.trim(), label: "Phases JSON", setErr: (e) => { this.editPhasesError = e; } },
+            { value: this.editRoles.trim(), label: "Roles JSON", setErr: (e) => { this.editRolesError = e; } },
+        ];
+        for (const v of jsonValidations) {
+            if (v.value) {
+                try { JSON.parse(v.value); } catch {
+                    v.setErr(`${v.label} is not valid JSON.`);
+                    this.snackBar.open(`${v.label} is not valid JSON — check the format.`, "Close", { duration: 4500 });
+                    return;
+                }
+            }
+        }
+
         this.saving.set(true);
         const body: Record<string, unknown> = {
-            name: this.editName.trim(),
+            name,
             templateType: this.editType,
         };
         if (this.editEffort) body["estimatedEffort"] = this.editEffort;
         if (this.editDifficulty) body["difficultyLevel"] = this.editDifficulty;
-        if (this.editDuration) body["estimatedDurationDays"] = this.editDuration;
+        if (this.editDuration && this.editDuration >= 1) body["estimatedDurationDays"] = this.editDuration;
         if (this.editTags.trim()) body["tags"] = this.editTags.trim();
         if (this.editDescription.trim()) body["useCaseDescription"] = this.editDescription.trim();
         if (this.editDefaultConfig.trim()) body["defaultProjectConfigJson"] = this.editDefaultConfig.trim();
