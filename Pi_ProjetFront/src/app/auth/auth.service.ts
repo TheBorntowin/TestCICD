@@ -3,8 +3,8 @@ import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { Observable, of } from 'rxjs';
-import { catchError, tap } from 'rxjs/operators';
-import { AuthResponse, LoginRequest, OrganizationContext, OrganizationOption, User } from './user.model';
+import { catchError, switchMap, tap } from 'rxjs/operators';
+import { AuthOrganization, AuthResponse, LoginRequest, OrganizationContext, OrganizationOption, User } from './user.model';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -35,7 +35,7 @@ export class AuthService {
           fullName: res.fullName,
           role: res.role as User['role']
         });
-        this.loadOrganizationContext();
+        this.setOrganizationFromResponse(res);
       })
     );
   }
@@ -55,14 +55,22 @@ export class AuthService {
           fullName: res.fullName,
           role: res.role,
         });
+        this.currentUser.set({
+          id: res.id,
+          email: res.email,
+          fullName: res.fullName,
+          role: res.role as User['role']
+        });
+        // Try setting org from embedded response (login flow); /me won't have it
+        this.setOrganizationFromResponse(res);
       }),
-      tap(res => this.currentUser.set({
-        id: res.id,
-        email: res.email,
-        fullName: res.fullName,
-        role: res.role as User['role']
-      })),
-      tap(() => this.loadOrganizationContext())
+      switchMap(res =>
+        this.fetchOrganizationOptions().pipe(
+          tap(orgs => this.setOrganizationFromOptions(orgs)),
+          catchError(() => of([])),
+          switchMap(() => of(res))
+        )
+      )
     );
   }
 
@@ -117,15 +125,32 @@ export class AuthService {
     this.currentOrganization.set(null);
   }
 
-  private loadOrganizationContext(): void {
-    this.fetchOrganizationContext()
-      .pipe(
-        catchError((error) => {
-          console.error('[AuthService] Failed to load organization context', error);
-          this.currentOrganization.set(null);
-          return of(null);
-        })
-      )
-      .subscribe();
+  private setOrganizationFromResponse(res: AuthResponse): void {
+    const orgs = res.organizations;
+    if (orgs && orgs.length > 0) {
+      const first: AuthOrganization = orgs[0];
+      this.currentOrganization.set({
+        organizationId: first.id,
+        organizationName: first.name,
+        organizationSlug: first.slug,
+        organizationType: first.orgType,
+        membershipRole: first.memberRole,
+      });
+    } else {
+      this.currentOrganization.set(null);
+    }
+  }
+
+  private setOrganizationFromOptions(orgs: OrganizationOption[]): void {
+    if (orgs && orgs.length > 0) {
+      const first = orgs[0];
+      this.currentOrganization.set({
+        organizationId: first.organizationId,
+        organizationName: first.organizationName,
+        organizationSlug: first.organizationSlug,
+        organizationType: first.organizationType,
+        membershipRole: first.membershipRole,
+      });
+    }
   }
 }

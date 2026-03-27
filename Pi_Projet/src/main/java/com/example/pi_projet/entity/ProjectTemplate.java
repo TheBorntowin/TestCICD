@@ -35,6 +35,7 @@ public class ProjectTemplate {
     private UUID id;
 
     // ================= ORGANIZATION =================
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organization_id")
     private Organization organization; // null = global template
@@ -172,6 +173,7 @@ public class ProjectTemplate {
     @Column(name = "created_by", nullable = false)
     private Long createdBy;
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", insertable = false, updatable = false)
     private User createdByUser;

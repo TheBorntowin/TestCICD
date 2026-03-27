@@ -28,6 +28,7 @@ export interface CreateProjectWorkflowDialogData {
 export interface CreateProjectWorkflowDialogResult {
     payload: Record<string, unknown>;
     assignments: Array<{ userId: number; role: string }>;
+    useTemplate?: boolean;
 }
 
 @Component({
@@ -81,6 +82,17 @@ export interface CreateProjectWorkflowDialogResult {
 
             <!-- Step 0: Basics -->
             @if (currentStep() === 0) {
+            <!-- Template shortcut banner -->
+            <div class="d-flex align-items-center gap-3 px-3 py-2 mb-3 rounded-3"
+                 style="cursor:pointer;border:1.5px dashed rgba(99,102,241,0.35);background:rgba(99,102,241,0.04);transition:all .15s;"
+                 (click)="switchToTemplate()">
+                <mat-icon class="material-icons-outlined" style="color:#6366f1;font-size:22px;width:22px;height:22px;flex-shrink:0;">layers</mat-icon>
+                <div class="flex-grow-1">
+                    <p class="small fw-medium mb-0" style="color:#6366f1;">Start from a Template</p>
+                    <p class="text-secondary mb-0" style="font-size:11px;">Use an approved blueprint — pre-filled phases, roles &amp; tasks.</p>
+                </div>
+                <mat-icon class="material-icons-outlined text-secondary" style="font-size:16px;width:16px;height:16px;flex-shrink:0;">arrow_forward</mat-icon>
+            </div>
             <form #basicsForm="ngForm">
                 <div class="row gx-3">
                     <div class="col-12 mb-3">
@@ -154,10 +166,15 @@ export interface CreateProjectWorkflowDialogResult {
                 <div class="col-12 col-sm-6 mb-3">
                     <mat-form-field appearance="outline" class="w-100">
                         <mat-label>End Date</mat-label>
-                        <input matInput [matDatepicker]="endPicker" [(ngModel)]="endDateVal" name="endDate" placeholder="Pick a date" />
+                        <input matInput [matDatepicker]="endPicker" [(ngModel)]="endDateVal" name="endDate"
+                               placeholder="Pick a date" [min]="startDateVal" />
                         <mat-datepicker-toggle matIconSuffix [for]="endPicker"></mat-datepicker-toggle>
                         <mat-datepicker #endPicker></mat-datepicker>
-                        <mat-hint>Optional — project deadline</mat-hint>
+                        @if (dateRangeValid()) {
+                            <mat-hint>Optional — project deadline</mat-hint>
+                        } @else {
+                            <mat-error>Must be on or after start date.</mat-error>
+                        }
                     </mat-form-field>
                 </div>
             </div>
@@ -270,7 +287,7 @@ export interface CreateProjectWorkflowDialogResult {
                 </button>
             }
             @if (currentStep() < 3) {
-                <button matButton="filled" (click)="nextStep()" [disabled]="!dateRangeValid()">
+                <button matButton="filled" (click)="nextStep()" [disabled]="currentStep() === 1 && !dateRangeValid()">
                     Continue <mat-icon class="material-icons-outlined">arrow_forward</mat-icon>
                 </button>
             }
@@ -591,6 +608,10 @@ export class CreateProjectWorkflowDialogComponent {
         }));
 
         this.dialogRef.close({ payload, assignments } as CreateProjectWorkflowDialogResult);
+    }
+
+    switchToTemplate(): void {
+        this.dialogRef.close({ useTemplate: true } as CreateProjectWorkflowDialogResult);
     }
 
     close(): void {

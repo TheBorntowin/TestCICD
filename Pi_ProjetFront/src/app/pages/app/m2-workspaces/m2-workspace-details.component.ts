@@ -14,6 +14,7 @@ import { catchError, take } from "rxjs/operators";
 import { AuthService } from "../../../auth/auth.service";
 import { CircleProgressBlueComponent } from "../../../components/charts/circle-progress-blue.component";
 import { CreateProjectWorkflowDialogComponent, CreateProjectWorkflowDialogResult } from "../m2-projects/create-project-workflow-dialog.component";
+import { UseTemplateWizardDialogComponent, UseTemplateWizardResult } from "../m2-templates/use-template-wizard-dialog.component";
 import { M2ProjectService } from "../m2-projects/m2-project.service";
 import { InviteMemberModalComponent } from "./invite-member-modal.component";
 import { MemberRoleEditDialogComponent, MemberRoleEditDialogResult } from "./member-role-edit-dialog.component";
@@ -360,31 +361,55 @@ interface WorkspaceActivity {
                             </ng-template>
 
                             <div class="p-3">
-                                <div class="d-flex justify-content-end gap-2 mb-3">
-                                    <button matButton (click)="goToRealProjects()">
-                                        <mat-icon class="material-icons-outlined">dataset</mat-icon>
-                                        Show All
-                                    </button>
-                                    <button matButton="filled" [disabled]="!canManageWorkspace()" (click)="openCreateProjectDialog()">
-                                        <mat-icon class="material-icons-outlined">add</mat-icon>
-                                        Create Project
-                                    </button>
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                    <div>
+                                        <p class="small text-secondary mb-0">{{ totalProjects() }} project{{ totalProjects() !== 1 ? 's' : '' }} · {{ activeProjects() }} active · {{ completedProjects() }} completed</p>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button matButton (click)="goToRealProjects()">
+                                            <mat-icon class="material-icons-outlined">open_in_new</mat-icon> Full View
+                                        </button>
+                                        <button matButton [disabled]="!canManageWorkspace()" (click)="openTemplateWizard(route.snapshot.paramMap.get('workspaceId') || '')">
+                                            <mat-icon class="material-icons-outlined">layers</mat-icon> From Template
+                                        </button>
+                                        <button matButton="filled" [disabled]="!canManageWorkspace()" (click)="openCreateProjectDialog()">
+                                            <mat-icon class="material-icons-outlined">add</mat-icon> New Project
+                                        </button>
+                                    </div>
                                 </div>
 
                                 @if (projects().length === 0) {
-                                <p class="text-secondary mb-0">No projects found for this workspace.</p>
+                                <div class="text-center py-5">
+                                    <div class="avatar avatar-60 rounded-circle bg-light-theme text-theme d-inline-flex align-items-center justify-content-center mb-3">
+                                        <mat-icon class="material-icons-outlined fs-2">assignment</mat-icon>
+                                    </div>
+                                    <h4 class="mb-2">No projects yet</h4>
+                                    <p class="text-secondary mb-3 small">Create your first project or use a template.</p>
+                                    <button matButton="filled" [disabled]="!canManageWorkspace()" (click)="openCreateProjectDialog()">
+                                        <mat-icon class="material-icons-outlined">add</mat-icon> Create Project
+                                    </button>
+                                </div>
                                 } @else {
                                 <div class="row gx-3">
                                     @for (project of projects(); track project.id) {
-                                    <div class="col-12 col-md-6">
-                                        <mat-card class="mb-3 bg-light-theme" [style.cursor]="'pointer'" (click)="openProjectDetails(project.id)">
-                                            <mat-card-content>
-                                                <h4 class="mb-1">{{ project.name }}</h4>
-                                                <p class="text-secondary small mb-2">{{ project.description || "No description" }}</p>
-                                                <div class="d-flex gap-2 align-items-center">
-                                                    <span class="badge badge-light">{{ project.status || "UNKNOWN" }}</span>
-                                                    <span class="badge" [ngClass]="project.visibility === 'PRIVATE' ? 'theme-orange' : 'theme-green'">{{ project.visibility || "PRIVATE" }}</span>
+                                    <div class="col-12 col-md-6 col-xl-4 mb-3">
+                                        <mat-card class="proj-card h-100" (click)="openProjectDetails(project.id)">
+                                            <div class="proj-card__bar" [class.proj-card__bar--active]="normalizeStatus(project.status) === 'ACTIVE'"
+                                                 [class.proj-card__bar--done]="normalizeStatus(project.status) === 'COMPLETED' || normalizeStatus(project.status) === 'ARCHIVED'"
+                                                 [class.proj-card__bar--hold]="normalizeStatus(project.status) === 'ON_HOLD'"></div>
+                                            <mat-card-content class="pb-2">
+                                                <h4 class="mb-1 text-truncate">{{ project.name }}</h4>
+                                                <p class="text-secondary small mb-2 text-truncate">{{ project.description || 'No description' }}</p>
+                                                <div class="d-flex flex-wrap gap-1 align-items-center mb-2">
+                                                    <span class="badge" [ngClass]="projectStatusBadge(project.status)">{{ project.status || 'UNKNOWN' }}</span>
+                                                    <span class="badge" [ngClass]="project.visibility === 'PRIVATE' ? 'theme-orange' : 'theme-green'">{{ project.visibility || 'PRIVATE' }}</span>
                                                 </div>
+                                                @if (project.createdAt) {
+                                                <p class="text-secondary mb-0" style="font-size:11px;">
+                                                    <mat-icon class="material-icons-outlined align-middle" style="font-size:12px;width:12px;height:12px;">schedule</mat-icon>
+                                                    Created {{ project.createdAt | date:'mediumDate' }}
+                                                </p>
+                                                }
                                             </mat-card-content>
                                         </mat-card>
                                     </div>
@@ -473,9 +498,27 @@ interface WorkspaceActivity {
             }
         </div>
     `,
+    styles: [`
+            .proj-card {
+                border: 1.5px solid rgba(0,0,0,0.07);
+                border-radius: 14px;
+                cursor: pointer;
+                overflow: hidden;
+                transition: all 0.18s ease;
+            }
+            .proj-card:hover {
+                border-color: rgba(0,136,255,0.25);
+                box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+                transform: translateY(-1px);
+            }
+            .proj-card__bar { height: 3px; background: #e2e8f0; }
+            .proj-card__bar--active { background: linear-gradient(90deg, #22c55e, #4ade80); }
+            .proj-card__bar--done { background: linear-gradient(90deg, #94a3b8, #cbd5e1); }
+            .proj-card__bar--hold { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    `],
 })
 export class M2WorkspaceDetailsComponent implements OnInit {
-    private readonly route = inject(ActivatedRoute);
+    readonly route = inject(ActivatedRoute);
     private readonly router = inject(Router);
     private readonly workspaceService = inject(M2WorkspaceService);
     private readonly workspaceMemberService = inject(WorkspaceMemberService);
@@ -774,6 +817,10 @@ export class M2WorkspaceDetailsComponent implements OnInit {
         });
 
         ref.afterClosed().pipe(take(1)).subscribe((result?: CreateProjectWorkflowDialogResult) => {
+            if (result?.useTemplate) {
+                setTimeout(() => this.openTemplateWizard(workspaceId), 150);
+                return;
+            }
             if (!result?.payload || !(result.payload["name"] as string | undefined)?.trim()) {
                 return;
             }
@@ -808,6 +855,21 @@ export class M2WorkspaceDetailsComponent implements OnInit {
                     this.snackBar.open(`Failed to create project: ${this.errorMessage(error)}`, "Close", { duration: 4500 });
                 },
             });
+        });
+    }
+
+    openTemplateWizard(workspaceId: string): void {
+        const ref = this.dialog.open(UseTemplateWizardDialogComponent, {
+            width: "820px",
+            maxWidth: "96vw",
+            maxHeight: "90vh",
+            autoFocus: false,
+            data: { workspaceId, workspaceName: this.workspace()?.name || "Workspace" },
+        });
+        ref.afterClosed().pipe(take(1)).subscribe((result: UseTemplateWizardResult) => {
+            if (result?.projectId) {
+                this.loadWorkspaceDetails(workspaceId);
+            }
         });
     }
 
@@ -1087,8 +1149,16 @@ export class M2WorkspaceDetailsComponent implements OnInit {
         });
     }
 
-    private normalizeStatus(value?: string): string {
+    normalizeStatus(value?: string): string {
         return (value || "").toUpperCase().trim();
+    }
+
+    projectStatusBadge(status?: string): string {
+        const s = this.normalizeStatus(status);
+        if (s === 'ACTIVE') return 'theme-green';
+        if (s === 'COMPLETED' || s === 'ARCHIVED') return 'badge-light';
+        if (s === 'ON_HOLD' || s === 'CANCELLED') return 'theme-orange';
+        return 'theme-blue';
     }
 
     private normalizeVisibility(value?: string): string {

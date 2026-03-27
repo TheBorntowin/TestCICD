@@ -11,4 +11,6 @@ import java.util.UUID;
 @Repository
 public interface ProjectTemplateRepository extends JpaRepository<ProjectTemplate, UUID> {
     Page<ProjectTemplate> findAllByIsPublicTrueAndStatus(ProjectTemplate.TemplateStatus status, Pageable pageable);
+    Page<ProjectTemplate> findByCreatedBy(Long createdBy, Pageable pageable);
+    Page<ProjectTemplate> findByStatus(ProjectTemplate.TemplateStatus status, Pageable pageable);
 }

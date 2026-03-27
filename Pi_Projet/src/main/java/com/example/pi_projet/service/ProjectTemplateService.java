@@ -29,11 +29,14 @@ public class ProjectTemplateService {
         if (template.getName() == null || template.getName().isBlank()) {
             throw new Module2Exception(BAD_REQUEST, "Template name is required");
         }
+        template.setVersion(template.getVersion() != null ? template.getVersion() : 1);
         template.setStatus(ProjectTemplate.TemplateStatus.DRAFT);
         template.setIsPublic(false);
         template.setUsageCount(0);
         template.setRating(0.0);
         template.setRatingCount(0);
+        if (template.getTeamStrategy() == null) template.setTeamStrategy(ProjectTemplate.TeamStrategy.MANUAL);
+        if (template.getTemplateType() == null) template.setTemplateType(ProjectTemplate.TemplateType.CUSTOM);
         return projectTemplateRepository.save(template);
     }
 
@@ -64,10 +67,6 @@ public class ProjectTemplateService {
     public ProjectTemplate publishTemplate(UUID id, Long requesterId) {
         ProjectTemplate t = projectTemplateRepository.findById(id)
             .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Template not found"));
-        // Ensure core JSON exists before publishing
-        if (t.getDefaultProjectConfigJson() == null || t.getDefaultProjectConfigJson().isBlank()) {
-            throw new Module2Exception(BAD_REQUEST, "Template missing default project config JSON");
-        }
         t.setIsPublic(true);
         t.setStatus(ProjectTemplate.TemplateStatus.PENDING_APPROVAL);
         return projectTemplateRepository.save(t);
@@ -110,5 +109,55 @@ public class ProjectTemplateService {
     // simple saver used by other services when updating usage or small fields
     public ProjectTemplate saveTemplate(ProjectTemplate template) {
         return projectTemplateRepository.save(template);
+    }
+
+    public Page<ProjectTemplate> getByCreatedBy(Long createdBy, Pageable pageable) {
+        return projectTemplateRepository.findByCreatedBy(createdBy, pageable);
+    }
+
+    public Page<ProjectTemplate> getByStatus(ProjectTemplate.TemplateStatus status, Pageable pageable) {
+        return projectTemplateRepository.findByStatus(status, pageable);
+    }
+
+    public ProjectTemplate featureTemplate(UUID id, boolean featured) {
+        ProjectTemplate t = projectTemplateRepository.findById(id)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Template not found"));
+        t.setIsFeatured(featured);
+        return projectTemplateRepository.save(t);
+    }
+
+    public ProjectTemplate trendingTemplate(UUID id, boolean trending) {
+        ProjectTemplate t = projectTemplateRepository.findById(id)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Template not found"));
+        t.setIsTrending(trending);
+        return projectTemplateRepository.save(t);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public ProjectTemplate forkTemplate(UUID sourceId, Long requesterId) {
+        ProjectTemplate s = projectTemplateRepository.findById(sourceId)
+            .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Template not found"));
+        ProjectTemplate fork = ProjectTemplate.builder()
+            .name(s.getName() + " (Fork)")
+            .templateType(s.getTemplateType())
+            .defaultProjectConfigJson(s.getDefaultProjectConfigJson())
+            .defaultPhasesJson(s.getDefaultPhasesJson())
+            .defaultRolesJson(s.getDefaultRolesJson())
+            .defaultMilestonesJson(s.getDefaultMilestonesJson())
+            .defaultTasksJson(s.getDefaultTasksJson())
+            .teamRecommendationJson(s.getTeamRecommendationJson())
+            .teamStrategy(s.getTeamStrategy())
+            .estimatedEffort(s.getEstimatedEffort())
+            .estimatedDurationDays(s.getEstimatedDurationDays())
+            .difficultyLevel(s.getDifficultyLevel())
+            .tags(s.getTags())
+            .useCaseDescription(s.getUseCaseDescription())
+            .parentTemplateId(s.getId())
+            .version(1)
+            .status(ProjectTemplate.TemplateStatus.DRAFT)
+            .isPublic(false)
+            .createdBy(requesterId)
+            .build();
+        return projectTemplateRepository.save(fork);
     }
 }

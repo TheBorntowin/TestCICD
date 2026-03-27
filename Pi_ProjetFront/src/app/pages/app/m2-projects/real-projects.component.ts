@@ -18,6 +18,7 @@ import { M2Workspace, M2WorkspaceMember, M2WorkspaceService } from "../m2-worksp
 import { ProjectsCardsComponent, TableItem as ProjectCardItem } from "./projects-cards.component";
 import { ProjectsGridComponent } from "./projects-grid.component";
 import { CreateProjectWorkflowDialogComponent, CreateProjectWorkflowDialogResult } from "./create-project-workflow-dialog.component";
+import { UseTemplateWizardDialogComponent, UseTemplateWizardResult } from "../m2-templates/use-template-wizard-dialog.component";
 import { register } from "swiper/element/bundle";
 
 register();
@@ -138,6 +139,7 @@ interface RealProjectRow {
                             <p class="opacity-75 mb-md-4 pb-lg-2">You can start with your very new project or you can create a task within your current project</p>
 
                             <button matButton="elevated" (click)="openCreateProjectDialog()"><mat-icon class="material-icons-outlined">add_circle</mat-icon> New Project</button>
+                            <button matButton class="ms-1 text-theme" (click)="openTemplatePickerDialog()"><mat-icon class="material-icons-outlined">layers</mat-icon> From Template</button>
                             <button matButton="filled" class="ms-1" disabled><mat-icon class="material-icons-outlined">add</mat-icon> New Task</button>
                         </mat-card-content>
                     </mat-card>
@@ -328,6 +330,11 @@ export class RealProjectsComponent implements OnInit {
         });
 
         ref.afterClosed().subscribe((result?: CreateProjectWorkflowDialogResult) => {
+            if (result?.useTemplate) {
+                // Defer to let the close animation finish before opening the next dialog
+                setTimeout(() => this.openTemplatePickerDialog(), 150);
+                return;
+            }
             if (!result?.payload) {
                 return;
             }
@@ -356,6 +363,26 @@ export class RealProjectsComponent implements OnInit {
                     this.snackBar.open(`Failed to create project: ${this.errorMessage(error)}`, "Close", { duration: 4200 });
                 },
             });
+        });
+    }
+
+    openTemplatePickerDialog(): void {
+        const workspaceId = this.selectedWorkspaceId();
+        if (!workspaceId) {
+            this.snackBar.open("Open this page from a workspace to use a template.", "Close", { duration: 3500 });
+            return;
+        }
+        const ref = this.dialog.open(UseTemplateWizardDialogComponent, {
+            width: "820px",
+            maxWidth: "96vw",
+            maxHeight: "90vh",
+            autoFocus: false,
+            data: { workspaceId, workspaceName: this.selectedWorkspaceName() || "Workspace" },
+        });
+        ref.afterClosed().subscribe((result: UseTemplateWizardResult) => {
+            if (result?.projectId) {
+                this.loadRealProjects();
+            }
         });
     }
 

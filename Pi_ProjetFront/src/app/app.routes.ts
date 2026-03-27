@@ -89,6 +89,14 @@ export const routes: Routes = [
                 loadComponent: () => import("./pages/app/m2-projects/real-project-details.component").then((c) => c.ProjectDetailsComponent),
             },
             {
+                path: "templates",
+                loadComponent: () => import("./pages/app/m2-templates/m2-templates.component").then((c) => c.M2TemplatesComponent),
+            },
+            {
+                path: "templates/:templateId",
+                loadComponent: () => import("./pages/app/m2-templates/m2-template-details.component").then((c) => c.M2TemplateDetailsComponent),
+            },
+            {
                 path: "m2-projects",
                 loadComponent: () => import("./pages/app/m2-projects/projects.component").then((c) => c.ProjectsComponent),
             },

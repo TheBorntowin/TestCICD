@@ -20,7 +20,13 @@ public class ProjectTemplateController {
     private final ProjectTemplateService projectTemplateService;
 
     @GetMapping
-    public Page<ProjectTemplate> getAll(@PageableDefault(size = 20) Pageable pageable) {
+    public Page<ProjectTemplate> getAll(
+            @RequestParam(required = false) Long createdBy,
+            @RequestParam(required = false) String status,
+            @PageableDefault(size = 50) Pageable pageable) {
+        if (createdBy != null) return projectTemplateService.getByCreatedBy(createdBy, pageable);
+        if (status != null) return projectTemplateService.getByStatus(
+                ProjectTemplate.TemplateStatus.valueOf(status), pageable);
         return projectTemplateService.getAll(pageable);
     }
 
@@ -74,5 +80,29 @@ public class ProjectTemplateController {
     @GetMapping("/public")
     public Page<ProjectTemplate> getPublic(@PageableDefault(size = 20) Pageable pageable) {
         return projectTemplateService.getPublicTemplates(pageable);
+    }
+
+    @GetMapping("/pending")
+    public Page<ProjectTemplate> getPending(@PageableDefault(size = 50) Pageable pageable) {
+        return projectTemplateService.getByStatus(ProjectTemplate.TemplateStatus.PENDING_APPROVAL, pageable);
+    }
+
+    @PatchMapping("/{id}/feature")
+    public ProjectTemplate setFeatured(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        boolean featured = Boolean.parseBoolean(body.getOrDefault("featured", false).toString());
+        return projectTemplateService.featureTemplate(id, featured);
+    }
+
+    @PatchMapping("/{id}/trending")
+    public ProjectTemplate setTrending(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        boolean trending = Boolean.parseBoolean(body.getOrDefault("trending", false).toString());
+        return projectTemplateService.trendingTemplate(id, trending);
+    }
+
+    @PostMapping("/{id}/fork")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ProjectTemplate fork(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        Long requesterId = Long.parseLong(body.get("requesterId").toString());
+        return projectTemplateService.forkTemplate(id, requesterId);
     }
 }

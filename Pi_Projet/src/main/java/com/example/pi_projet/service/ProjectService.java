@@ -118,7 +118,7 @@ public class ProjectService {
     }
 
     @Transactional
-    public Project createProjectFromTemplate(UUID workspaceId, UUID templateId, String nameOverride, Long requesterId) {
+    public Project createProjectFromTemplate(UUID workspaceId, UUID templateId, String nameOverride, LocalDate startDate, LocalDate endDate, Long requesterId) {
         ProjectTemplate template = templateService.getById(templateId)
             .orElseThrow(() -> new Module2Exception(NOT_FOUND, "Template not found"));
         if (template.getStatus() != ProjectTemplate.TemplateStatus.APPROVED) {
@@ -138,6 +138,8 @@ public class ProjectService {
             .name(nameOverride != null ? nameOverride : template.getName())
             .description(template.getUseCaseDescription())
             .visibility(template.getDefaultVisibility() == ProjectTemplate.DefaultVisibility.PUBLIC ? Visibility.PUBLIC : Visibility.PRIVATE)
+            .startDate(startDate)
+            .endDate(endDate)
             .build();
         p = projectRepo.save(p);
         String orgType = resolveWorkspaceOrgType(ws);

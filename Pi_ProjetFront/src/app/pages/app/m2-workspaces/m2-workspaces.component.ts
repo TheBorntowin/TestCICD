@@ -27,6 +27,7 @@ interface WorkspaceViewRow {
     createdAt: string;
     organizationName: string;
     orgType: string;
+    projectCount: number | null;
 }
 
 interface M2CreateWorkspaceDialogData {
@@ -346,32 +347,37 @@ export class M2CreateWorkspaceDialogComponent {
             <mat-card class="bg-light-theme shadow-none pt-3 pb-lg-3 px-3">
                 <div class="row gx-3 align-items-center">
                     <div class="col-12 col-md mb-3 mb-xl-0 py-1 order-1 order-lg-1">
-                        <h3 class="mb-1">Workspaces</h3>
+                        <h3 class="mb-1">My Workspaces</h3>
                         <p class="small mb-1">
                             <span routerLink="/app/dashboard" class="me-2 text-theme style-none"><mat-icon class="material-icons-outlined align-middle text-sm">house</mat-icon> Home</span>
                             <mat-icon class="material-icons-outlined align-middle text-sm me-2">chevron_right</mat-icon>
                             Workspaces
                         </p>
-                        <p class="small text-secondary mb-0">Only workspaces you are a member of are shown.</p>
+                        @if (!isLoading() && workspaces().length > 0) {
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <span class="badge badge-light">{{ workspaces().length }} total</span>
+                            @if (enterpriseCount() > 0) {
+                            <span class="badge theme-blue">{{ enterpriseCount() }} Enterprise</span>
+                            }
+                            @if (academicCount() > 0) {
+                            <span class="badge theme-violet">{{ academicCount() }} Academic</span>
+                            }
+                        </div>
+                        }
                     </div>
 
                     <div class="col-12 col-lg-4 mb-3 mb-xl-0 order-3 order-lg-2">
                         <mat-form-field appearance="outline" class="w-100 inline-small">
                             <mat-label>Search workspace</mat-label>
                             <mat-icon matPrefix>search</mat-icon>
-                            <input matInput [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" placeholder="Search by name, slug, org" />
+                            <input matInput [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" placeholder="Name, slug or org…" />
                         </mat-form-field>
                     </div>
 
                     <div class="col-auto order-2 order-lg-3 mb-3 mb-xl-0">
                         <button matButton (click)="loadWorkspaces()"><mat-icon class="material-icons-outlined">refresh</mat-icon> Refresh</button>
-                        <button matButton="filled" class="ms-1" [disabled]="!permissionService.canCreateWorkspace()" (click)="openCreateGroupDialog()">
-                            <mat-icon class="material-icons-outlined">group_add</mat-icon>
-                            Create Group
-                        </button>
                         <button matButton="filled" class="ms-1" [disabled]="!permissionService.canCreateWorkspace()" (click)="openCreateWorkspaceDialog()">
-                            <mat-icon class="material-icons-outlined">add</mat-icon>
-                            Workspace
+                            <mat-icon class="material-icons-outlined">add</mat-icon> New Workspace
                         </button>
                     </div>
                 </div>
@@ -393,114 +399,129 @@ export class M2CreateWorkspaceDialogComponent {
             </mat-card>
             }
 
+            @if (isLoading()) {
+            <div class="row gx-3 gx-lg-4 mb-3">
+                @for (i of [1,2,3]; track i) {
+                <div class="col-12 col-sm-6 col-xl-4 mb-3 mb-lg-4">
+                    <mat-card class="ws-skeleton"><mat-card-content style="height:160px;"></mat-card-content></mat-card>
+                </div>
+                }
+            </div>
+            }
+
             @if (!isLoading() && filteredWorkspaces().length === 0) {
             <mat-card class="mb-3 mb-lg-4">
                 <mat-card-content class="text-center py-5">
                     <div class="avatar avatar-80 rounded-circle bg-light-theme text-theme d-inline-flex align-items-center justify-content-center mb-3">
                         <mat-icon class="material-icons-outlined fs-1">workspaces</mat-icon>
                     </div>
-                    <h3 class="mb-2">You have no workspaces yet</h3>
+                    <h3 class="mb-2">No workspaces yet</h3>
                     <p class="text-secondary mb-3">You can only see workspaces where you are explicitly a member.</p>
                     <button matButton="filled" [disabled]="!permissionService.canCreateWorkspace()" (click)="openCreateWorkspaceDialog()">
-                        <mat-icon class="material-icons-outlined">add_circle</mat-icon>
-                        Create Workspace
-                    </button>
-                    <button matButton class="ms-2" [disabled]="!permissionService.canCreateWorkspace()" (click)="openCreateGroupDialog()">
-                        <mat-icon class="material-icons-outlined">group_add</mat-icon>
-                        Create Group
+                        <mat-icon class="material-icons-outlined">add_circle</mat-icon> Create Workspace
                     </button>
                 </mat-card-content>
             </mat-card>
             }
 
-            @if (filteredWorkspaces().length > 0) {
+            @if (!isLoading() && filteredWorkspaces().length > 0) {
             <div class="row gx-3 gx-lg-4 mb-3">
                 @for (workspace of filteredWorkspaces(); track workspace.id) {
-                <div class="col-12 col-sm-6 col-lg-4">
-                    <mat-card class="overflow-hidden mb-3 mb-lg-4" [class.opacity-50]="!canOpenWorkspace(workspace)" [style.cursor]="canOpenWorkspace(workspace) ? 'pointer' : 'not-allowed'" (click)="openWorkspaceDetails(workspace)">
-                        <mat-card-content>
-                            <div class="d-flex align-items-start mb-3">
-                                <div class="avatar avatar-50 text-theme rounded bg-light-theme me-3 d-flex align-items-center justify-content-center">
-                                    <mat-icon class="material-icons-outlined">workspaces</mat-icon>
+                <div class="col-12 col-sm-6 col-xl-4 mb-3 mb-lg-4">
+                    <mat-card class="ws-card h-100"
+                              [class.ws-card--disabled]="!canOpenWorkspace(workspace)"
+                              (click)="openWorkspaceDetails(workspace)">
+                        <div class="ws-card__accent" [class.ws-card__accent--academic]="workspace.orgType === 'ACADEMIC'"></div>
+                        <mat-card-content class="pb-2">
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <div class="ws-avatar" [class.ws-avatar--academic]="workspace.orgType === 'ACADEMIC'">
+                                    {{ workspace.name.charAt(0).toUpperCase() }}
                                 </div>
-                                <div class="flex-grow-1">
-                                    <h4 class="mb-1 text-truncated">{{ workspace.name }}</h4>
-                                    <p class="text-secondary small mb-0">{{ workspace.slug }}</p>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <h4 class="mb-0 text-truncate">{{ workspace.name }}</h4>
+                                    <p class="text-secondary small mb-0 text-truncate">{{ workspace.slug }}</p>
                                 </div>
+                                <mat-icon class="ws-open-arrow material-icons-outlined">arrow_forward</mat-icon>
                             </div>
 
-                            <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
-                                <span class="badge badge-light">{{ workspace.organizationName }}</span>
-                                <span class="badge" [ngClass]="workspace.orgType === 'ACADEMIC' ? 'theme-violet' : 'theme-blue'">{{ workspace.orgType === "ACADEMIC" ? "Academic" : "Enterprise" }}</span>
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <mat-icon class="material-icons-outlined text-secondary" style="font-size:15px;width:15px;height:15px;">business</mat-icon>
+                                <p class="text-secondary small mb-0 text-truncate">{{ workspace.organizationName }}</p>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-1 mb-3">
+                                <span class="badge" [ngClass]="workspace.orgType === 'ACADEMIC' ? 'theme-violet' : 'theme-blue'">
+                                    {{ workspace.orgType === 'ACADEMIC' ? 'Academic' : 'Enterprise' }}
+                                </span>
                                 @if (isDefaultWorkspace(workspace)) {
-                                <span class="badge theme-green">Default Workspace</span>
+                                <span class="badge theme-green">Default</span>
                                 }
                             </div>
 
-                            <p class="text-secondary small mb-0">Created {{ workspace.createdAt }}</p>
+                            <div class="ws-card__footer d-flex align-items-center gap-3">
+                                <div class="d-flex align-items-center gap-1">
+                                    <mat-icon class="material-icons-outlined text-secondary" style="font-size:14px;width:14px;height:14px;">folder_open</mat-icon>
+                                    <span class="text-secondary" style="font-size:12px;">
+                                        @if (workspace.projectCount === null) { <span style="opacity:.5;">…</span> }
+                                        @else { {{ workspace.projectCount }} project{{ workspace.projectCount !== 1 ? 's' : '' }} }
+                                    </span>
+                                </div>
+                                <div class="d-flex align-items-center gap-1 ms-auto">
+                                    <mat-icon class="material-icons-outlined text-secondary" style="font-size:14px;width:14px;height:14px;">schedule</mat-icon>
+                                    <span class="text-secondary" style="font-size:12px;">{{ workspace.createdAt }}</span>
+                                </div>
+                            </div>
                         </mat-card-content>
                     </mat-card>
                 </div>
                 }
             </div>
-
-            <mat-card class="mb-3 mb-lg-4">
-                <mat-card-content>
-                    <div class="row gx-3 align-items-center mb-3">
-                        <div class="col">
-                            <h3 class="mb-1">Workspace Table</h3>
-                            <p class="text-secondary small mb-0">Visibility is enforced by backend membership rules.</p>
-                        </div>
-                    </div>
-
-                    <table mat-table [dataSource]="filteredWorkspaces()" class="bg-none responsive-table">
-                        <ng-container matColumnDef="name">
-                            <th mat-header-cell *matHeaderCellDef>Workspace</th>
-                            <td mat-cell *matCellDef="let item" class="py-2">
-                                <h4 class="mb-0">{{ item.name }}</h4>
-                                <p class="text-secondary small mb-0">{{ item.slug }}</p>
-                            </td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="organization">
-                            <th mat-header-cell *matHeaderCellDef>Organization</th>
-                            <td mat-cell *matCellDef="let item" class="py-2">
-                                <span class="badge badge-light me-1">{{ item.organizationName }}</span>
-                                <span class="badge" [ngClass]="item.orgType === 'ACADEMIC' ? 'theme-violet' : 'theme-blue'">{{ item.orgType === "ACADEMIC" ? "Academic" : "Enterprise" }}</span>
-                            </td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="default">
-                            <th mat-header-cell *matHeaderCellDef>Flags</th>
-                            <td mat-cell *matCellDef="let item" class="py-2">
-                                @if (isDefaultWorkspace(item)) {
-                                <span class="badge theme-green">Default Workspace</span>
-                                } @else {
-                                <span class="text-secondary small">-</span>
-                                }
-                            </td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="createdAt">
-                            <th mat-header-cell *matHeaderCellDef>Created</th>
-                            <td mat-cell *matCellDef="let item" class="py-2">{{ item.createdAt }}</td>
-                        </ng-container>
-
-                        <ng-container matColumnDef="actions">
-                            <th mat-header-cell *matHeaderCellDef>Actions</th>
-                            <td mat-cell *matCellDef="let item" class="py-2">
-                                <button matButton="filled" [disabled]="!canOpenWorkspace(item)" (click)="openWorkspaceDetails(item, $event)">Open</button>
-                            </td>
-                        </ng-container>
-
-                        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                        <tr mat-row *matRowDef="let row; columns: displayedColumns" [style.cursor]="canOpenWorkspace(row) ? 'pointer' : 'not-allowed'" (click)="openWorkspaceDetails(row)"></tr>
-                    </table>
-                </mat-card-content>
-            </mat-card>
             }
         </div>
     `,
+    styles: [`
+            .ws-card {
+                border: 1.5px solid rgba(0, 0, 0, 0.07);
+                border-radius: 16px;
+                transition: all 0.22s ease;
+                cursor: pointer;
+                overflow: hidden;
+                position: relative;
+            }
+            .ws-card:hover {
+                border-color: rgba(0, 136, 255, 0.3);
+                box-shadow: 0 6px 24px rgba(0, 0, 0, 0.09);
+                transform: translateY(-2px);
+            }
+            .ws-card:hover .ws-open-arrow { opacity: 1; color: #0088ff; }
+            .ws-card--disabled { opacity: 0.5; cursor: not-allowed; }
+            .ws-card--disabled:hover { transform: none; box-shadow: none; border-color: rgba(0,0,0,0.07); }
+            .ws-card__accent {
+                height: 4px;
+                background: linear-gradient(90deg, #0088ff, #00ccff);
+            }
+            .ws-card__accent--academic {
+                background: linear-gradient(90deg, #7c3aed, #a78bfa);
+            }
+            .ws-card__footer {
+                border-top: 1px solid rgba(0, 0, 0, 0.06);
+                padding-top: 10px;
+                margin-top: 4px;
+            }
+            .ws-avatar {
+                width: 46px; height: 46px; border-radius: 12px;
+                background: rgba(0, 136, 255, 0.1); color: #0088ff;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 18px; font-weight: 700; flex-shrink: 0;
+            }
+            .ws-avatar--academic { background: rgba(124, 58, 237, 0.1); color: #7c3aed; }
+            .ws-open-arrow {
+                font-size: 18px; width: 18px; height: 18px;
+                opacity: 0.25; transition: all 0.2s; flex-shrink: 0;
+            }
+            .ws-skeleton { border-radius: 16px; animation: pulse 1.5s ease-in-out infinite; }
+            @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+    `],
 })
 export class M2WorkspacesComponent implements OnInit {
     private readonly workspaceService = inject(M2WorkspaceService);
@@ -532,6 +553,9 @@ export class M2WorkspacesComponent implements OnInit {
         );
     });
 
+    readonly enterpriseCount = computed(() => this.workspaces().filter(w => w.orgType !== 'ACADEMIC').length);
+    readonly academicCount = computed(() => this.workspaces().filter(w => w.orgType === 'ACADEMIC').length);
+
     ngOnInit(): void {
         this.loadOrganizationOptions();
         this.loadWorkspaces();
@@ -540,17 +564,26 @@ export class M2WorkspacesComponent implements OnInit {
     loadWorkspaces(): void {
         this.isLoading.set(true);
         this.lastError.set(null);
-
         this.workspaceService.getWorkspaces().subscribe({
             next: (rows) => {
                 this.workspaces.set(rows.map((row) => this.toViewRow(row)));
                 this.isLoading.set(false);
+                this.loadProjectCounts(rows.map(r => r.id));
             },
             error: (error: HttpErrorResponse) => {
                 this.workspaces.set([]);
                 this.isLoading.set(false);
                 this.lastError.set(this.errorMessage(error));
             },
+        });
+    }
+
+    private loadProjectCounts(ids: string[]): void {
+        ids.forEach(id => {
+            this.workspaceService.getWorkspaceProjects(id, 0, 1).subscribe({
+                next: (page) => this.workspaces.update(rows => rows.map(w => w.id === id ? { ...w, projectCount: page.totalElements ?? 0 } : w)),
+                error: () => this.workspaces.update(rows => rows.map(w => w.id === id ? { ...w, projectCount: 0 } : w)),
+            });
         });
     }
 
@@ -652,6 +685,7 @@ export class M2WorkspacesComponent implements OnInit {
             createdAt: createdAt ? createdAt.toLocaleDateString() : "-",
             organizationName: workspace.organization?.name || "Organization",
             orgType: (workspace.orgType || workspace.organization?.orgType || "ENTERPRISE").toUpperCase(),
+            projectCount: null,
         };
     }
 

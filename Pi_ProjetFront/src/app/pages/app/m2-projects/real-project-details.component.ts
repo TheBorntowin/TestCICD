@@ -159,6 +159,67 @@ interface ProjectMemberView {
                 </div>
             </div>
 
+            <!-- ── Project Timeline ── -->
+            @if (project()?.startDate || project()?.endDate) {
+            <mat-card class="mb-3 mb-lg-4">
+                <mat-card-content>
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <h4 class="mb-0">Project Timeline</h4>
+                            <p class="text-secondary small mb-0">
+                                {{ startDateLabel() }} → {{ endDateLabel() }}
+                                @if (daysRemaining() !== null) {
+                                    &nbsp;·&nbsp;
+                                    @if (daysRemaining()! < 0) { <span style="color:#ef4444;">Overdue by {{ -daysRemaining()! }} day{{ -daysRemaining()! !== 1 ? 's' : '' }}</span> }
+                                    @else if (daysRemaining()! === 0) { <span style="color:#f59e0b;">Ends today</span> }
+                                    @else { <span style="color:#22c55e;">{{ daysRemaining() }} day{{ daysRemaining() !== 1 ? 's' : '' }} remaining</span> }
+                                }
+                            </p>
+                        </div>
+                        <div class="text-end flex-shrink-0">
+                            <p class="mb-0 fw-semibold" style="font-size:22px;color:#6366f1;">{{ timelineProgressPercent() }}%</p>
+                            <p class="text-secondary small mb-0">elapsed</p>
+                        </div>
+                    </div>
+                    <!-- Progress bar -->
+                    <div style="position:relative;height:10px;border-radius:6px;background:rgba(0,0,0,0.07);overflow:hidden;">
+                        <div style="height:100%;border-radius:6px;transition:width .4s ease;"
+                             [style.width]="timelineProgressPercent() + '%'"
+                             [style.background]="daysRemaining() !== null && daysRemaining()! < 0 ? 'linear-gradient(90deg,#ef4444,#f87171)' : daysRemaining() === 0 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#6366f1,#818cf8)'">
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-1">
+                        <span class="text-secondary" style="font-size:11px;">{{ startDateLabel() }}</span>
+                        <span class="text-secondary" style="font-size:11px;">{{ endDateLabel() }}</span>
+                    </div>
+                    @if (!project()?.startDate || !project()?.endDate) {
+                    <p class="text-secondary small mb-0 mt-2">
+                        <mat-icon class="material-icons-outlined align-middle" style="font-size:14px;width:14px;height:14px;">info</mat-icon>
+                        Set both start and end dates to see the full timeline.
+                    </p>
+                    }
+                </mat-card-content>
+            </mat-card>
+            }
+
+            <!-- ── Phases ── -->
+            <mat-card class="mb-3 mb-lg-4" style="border:1.5px dashed rgba(0,0,0,0.1);">
+                <mat-card-content>
+                    <div class="d-flex align-items-center gap-3">
+                        <div style="width:40px;height:40px;border-radius:10px;background:rgba(99,102,241,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <mat-icon class="material-icons-outlined" style="color:#6366f1;">timeline</mat-icon>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h5 class="mb-0">Phases</h5>
+                            <p class="text-secondary small mb-0">Phase breakdown is defined at project creation via templates. This project has no saved phase structure.</p>
+                        </div>
+                        @if (canManageProjects()) {
+                        <span class="badge badge-light flex-shrink-0">Planned via template</span>
+                        }
+                    </div>
+                </mat-card-content>
+            </mat-card>
+
             <div class="row gx-3 gx-lg-4">
                 <div class="col-12 col-lg-4">
                     <mat-card class="mb-3 mb-lg-4">
@@ -432,6 +493,16 @@ export class ProjectDetailsComponent implements OnInit {
         if (days === 0) return "Ends today";
         if (days === 1) return "1 day left";
         return `${days} days left`;
+    });
+
+    readonly timelineProgressPercent = computed(() => {
+        const start = this.project()?.startDate ? new Date(this.project()!.startDate!).getTime() : null;
+        const end = this.project()?.endDate ? new Date(this.project()!.endDate!).getTime() : null;
+        if (!start || !end || end <= start) return 0;
+        const now = Date.now();
+        if (now <= start) return 0;
+        if (now >= end) return 100;
+        return Math.round(((now - start) / (end - start)) * 100);
     });
 
     ngOnInit(): void {

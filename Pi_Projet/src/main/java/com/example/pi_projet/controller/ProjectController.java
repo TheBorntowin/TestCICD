@@ -60,6 +60,20 @@ public class ProjectController {
             visibility, startDate, endDate, currentUser.getId());
     }
 
+    @PostMapping("/from-template/{templateId}")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Project createFromTemplate(@PathVariable UUID workspaceId,
+                                      @PathVariable UUID templateId,
+                                      @RequestBody Map<String, Object> body,
+                                      HttpServletRequest request) {
+        User currentUser = requireCurrentUser(request);
+        String nameOverride = body.containsKey("name") ? (String) body.get("name") : null;
+        LocalDate startDate = parseOptionalDate(body.get("startDate"), "startDate");
+        LocalDate endDate   = parseOptionalDate(body.get("endDate"),   "endDate");
+        validateDateRange(startDate, endDate);
+        return projectService.createProjectFromTemplate(workspaceId, templateId, nameOverride, startDate, endDate, currentUser.getId());
+    }
+
     @PutMapping("/{projectId}")
     public Project update(@PathVariable UUID workspaceId,
                           @PathVariable UUID projectId,
