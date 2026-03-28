@@ -82,7 +82,7 @@ public class WorkspaceService {
             throw new Module2Exception(NOT_FOUND, "Requester user not found");
         }
 
-        String finalName = StringUtils.trimWhitespace(name);
+        String finalName = (name != null ? name.trim() : "");
         if (!StringUtils.hasText(finalName)) {
             throw new Module2Exception(VALIDATION, "Workspace name is required");
         }
@@ -151,7 +151,7 @@ public class WorkspaceService {
         Workspace ws = getById(id);
         assertCanManageWorkspaceLikeCreatePolicy(requester, ws);
 
-        String finalName = StringUtils.trimWhitespace(name);
+        String finalName = (name != null ? name.trim() : "");
         if (!StringUtils.hasText(finalName)) {
             throw new Module2Exception(VALIDATION, "Workspace name is required");
         }

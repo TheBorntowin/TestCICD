@@ -38,6 +38,10 @@ public class User {
     @Column(name = "mfa_enabled")
     private Boolean mfaEnabled = false;
 
+    @Builder.Default
+    @Column(name = "must_change_password")
+    private Boolean mustChangePassword = false;
+
     @Column(name = "mfa_secret")
     private String mfaSecret;
 

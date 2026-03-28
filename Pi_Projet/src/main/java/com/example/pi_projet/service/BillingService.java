@@ -296,7 +296,7 @@ public class BillingService {
     }
 
     public List<InvoiceLineItemDTO> getMyLineItems(Long userId) {
-        return organizationRepository.findByOwnerId(userId)
+        return organizationRepository.findFirstByOwnerId(userId)
             .map(org -> invoiceLineItemRepository
                 .findByInvoice_Organization_Id(org.getId())
                 .stream().map(InvoiceLineItemDTO::from).collect(Collectors.toList()))
@@ -312,7 +312,7 @@ public class BillingService {
     }
 
     public List<PaymentAttemptDTO> getMyPaymentAttempts(Long userId) {
-        return organizationRepository.findByOwnerId(userId)
+        return organizationRepository.findFirstByOwnerId(userId)
             .map(org -> paymentAttemptRepository
                 .findByOrganization_IdOrderByAttemptedAtDesc(org.getId())
                 .stream().map(PaymentAttemptDTO::from).collect(Collectors.toList()))
@@ -328,7 +328,7 @@ public class BillingService {
     // USAGE QUOTA
     // ─────────────────────────────────────────────────────────────────────────
     public Optional<UsageQuotaDTO> getMyUsageQuota(Long userId) {
-        return organizationRepository.findByOwnerId(userId)
+        return organizationRepository.findFirstByOwnerId(userId)
             .flatMap(org -> usageQuotaRepository
                 .findTopByOrganization_IdOrderByMetricDateDesc(org.getId()))
             .map(UsageQuotaDTO::from);
@@ -348,13 +348,13 @@ public class BillingService {
     }
 
     public Optional<SubscriptionDTO> getMySubscription(Long userId) {
-        return organizationRepository.findByOwnerId(userId)
+        return organizationRepository.findFirstByOwnerId(userId)
             .flatMap(org -> subscriptionRepository.findTopByOrganizationOrderByCreatedAtDesc(org))
             .map(SubscriptionDTO::from);
     }
 
     public List<InvoiceDTO> getMyInvoices(Long userId) {
-        return organizationRepository.findByOwnerId(userId)
+        return organizationRepository.findFirstByOwnerId(userId)
             .map(org -> invoiceRepository.findByOrganizationOrderByCreatedAtDesc(org)
                 .stream().map(InvoiceDTO::from).collect(Collectors.toList()))
             .orElse(List.of());
