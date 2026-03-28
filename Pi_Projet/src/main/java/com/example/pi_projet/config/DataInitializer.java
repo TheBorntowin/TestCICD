@@ -3,9 +3,7 @@ package com.example.pi_projet.config;
 import com.example.pi_projet.entity.User;
 import com.example.pi_projet.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -17,8 +15,6 @@ import java.util.List;
  */
 @Component
 @RequiredArgsConstructor
-@Order(1)
-@Slf4j
 public class DataInitializer implements CommandLineRunner {
 
     private final UserRepository userRepository;
@@ -34,35 +30,20 @@ public class DataInitializer implements CommandLineRunner {
             new TestUser("po@test.com",           "productowner123",  "Product Owner",  User.RoleName.PRODUCT_OWNER),
             new TestUser("student@test.com",    "student123",    "Student User",  User.RoleName.STUDENT),
             new TestUser("viewer@test.com",     "viewer123",     "Viewer User",   User.RoleName.VIEWER),
-            new TestUser("employee@test.com",   "employee123",   "Employee User", User.RoleName.EMPLOYEE),
-
-            // Enterprise (TechCorp) additional invite-flow test users
-            new TestUser("developer1@test.com", "password123", "John Developer", User.RoleName.EMPLOYEE),
-            new TestUser("developer2@test.com", "password123", "Maria Coder", User.RoleName.EMPLOYEE),
-            new TestUser("analyst@test.com", "password123", "Sarah Analyst", User.RoleName.VIEWER),
-
-            // Academic (Engineering Faculty) additional invite-flow test users
-            new TestUser("student1@test.com", "password123", "Ahmed Student", User.RoleName.STUDENT),
-            new TestUser("student2@test.com", "password123", "Leila Benali", User.RoleName.STUDENT),
-            // TA role is not available in User.RoleName, use STUDENT at user level.
-            new TestUser("ta@test.com", "password123", "Karim TA", User.RoleName.STUDENT)
+            new TestUser("employee@test.com",   "employee123",   "Employee User", User.RoleName.EMPLOYEE)
         );
 
         for (TestUser u : users) {
             if (!userRepository.existsByEmail(u.email())) {
-                try {
-                    userRepository.save(User.builder()
-                        .email(u.email())
-                        .passwordHash(passwordEncoder.encode(u.password()))
-                        .fullName(u.fullName())
-                        .role(u.role())
-                        .isActive(true)
-                        .isVerified(true)
-                        .build());
-                    log.info("[DataInitializer] Created user {}", u.email());
-                } catch (Exception ex) {
-                    log.error("[DataInitializer] Failed to seed user {} with role {}", u.email(), u.role(), ex);
-                }
+                userRepository.save(User.builder()
+                    .email(u.email())
+                    .passwordHash(passwordEncoder.encode(u.password()))
+                    .fullName(u.fullName())
+                    .role(u.role())
+                    .isActive(true)
+                    .isVerified(true)
+                    .build());
+                System.out.println("[DataInitializer] Created: " + u.email() + " / " + u.password());
             }
         }
     }
